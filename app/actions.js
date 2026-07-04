@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDayStart } from "@/lib/day";
+import { notifyOthers } from "@/lib/push";
 
 export async function logout() {
   const supabase = await createClient();
@@ -37,6 +38,18 @@ export async function checkIn() {
   const { error } = await supabase.from("checkins").insert({ user_id: user.id });
   if (error) {
     return { error: `Checkin nije prošao: ${error.message}` };
+  }
+
+  // Push ostalima — ne smije srušiti checkin ako slanje pukne
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle();
+    await notifyOthers(user.id, profile?.username ?? "Netko");
+  } catch {
+    // ignoriraj: checkin je prošao, obavijesti su best-effort
   }
 
   return { ok: true };

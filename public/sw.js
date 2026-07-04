@@ -1,6 +1,36 @@
 // Minimalni SW za instalabilnost. Network-first: uvijek svježi podaci,
 // cache služi samo kao offline fallback.
-const CACHE = "lakat-v1";
+const CACHE = "lakat-v2";
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    // krivi payload — prikaži default
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "LAKAT", {
+      body: data.body || "Nešto se događa za šankom.",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((windows) => {
+        for (const win of windows) {
+          if ("focus" in win) return win.focus();
+        }
+        return self.clients.openWindow("/");
+      })
+  );
+});
 
 self.addEventListener("install", () => {
   self.skipWaiting();
