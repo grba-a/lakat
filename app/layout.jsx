@@ -1,4 +1,5 @@
 import { Anton, Archivo } from "next/font/google";
+import SwRegister from "./sw-register";
 import "./globals.css";
 
 const anton = Anton({
@@ -15,6 +16,18 @@ const archivo = Archivo({
 export const metadata = {
   title: "Lakat",
   description: "Tko je za šankom, a tko je pička. Uživo.",
+  icons: {
+    apple: "/icon-192.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Lakat",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport = {
+  themeColor: "#09090b",
 };
 
 export default function RootLayout({ children }) {
@@ -22,6 +35,7 @@ export default function RootLayout({ children }) {
     <html lang="hr" className={`${anton.variable} ${archivo.variable}`}>
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
         {children}
+        <SwRegister />
       </body>
     </html>
   );

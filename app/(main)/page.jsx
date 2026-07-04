@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDayStart } from "@/lib/day";
 import Sank from "./sank";
+import InstallHint from "./install-hint";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -27,6 +28,7 @@ export default async function Home() {
         initialCheckins={checkins ?? []}
         currentUserId={user.id}
       />
+      <InstallHint />
     </main>
   );
 }

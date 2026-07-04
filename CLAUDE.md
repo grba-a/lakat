@@ -71,5 +71,5 @@ Supabase Realtime subscription na `checkins` (INSERT). Kad netko klikne "TU SAM"
 - [x] Faza 1: setup, auth, registracija sa šifrom
 - [x] Faza 2: glavni ekran, check-in, realtime popis
 - [x] Faza 3: hall of shame + statistika profila
-- [ ] Faza 4: PWA (manifest, ikone, instalacija)
+- [x] Faza 4: PWA (manifest, ikone, instalacija)
 - [ ] Faza 5: push notifikacije
