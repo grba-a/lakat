@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getCurrentDayStart } from "@/lib/day";
-import { checkIn } from "./actions";
+import { checkIn } from "@/app/actions";
 
 const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",

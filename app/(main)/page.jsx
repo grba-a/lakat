@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDayStart } from "@/lib/day";
-import { logout } from "./actions";
 import Sank from "./sank";
 
 export default async function Home() {
@@ -22,21 +21,7 @@ export default async function Home() {
   ]);
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col px-5 py-6">
-      <header className="flex items-center justify-between">
-        <h1 className="font-display text-3xl uppercase leading-none tracking-tight">
-          Lakat<span className="text-accent">.</span>
-        </h1>
-        <form action={logout}>
-          <button
-            type="submit"
-            className="px-2 py-2 text-xs font-bold uppercase tracking-widest text-muted underline underline-offset-4"
-          >
-            Odjava
-          </button>
-        </form>
-      </header>
-
+    <main className="flex flex-1 flex-col">
       <Sank
         profiles={profiles ?? []}
         initialCheckins={checkins ?? []}
