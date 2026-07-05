@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllCheckins } from "@/lib/checkins";
@@ -102,28 +103,33 @@ export default async function ShamePage() {
             return (
               <li
                 key={entry.id}
-                className={`surface-2 flex h-14 items-center justify-between rounded-row px-4 ${
+                className={`surface-2 pressable-soft rounded-row ${
                   isLoser ? "border-danger/30 bg-danger/[0.08]" : ""
                 }`}
                 style={{ "--stagger-i": Math.min(i, 8) }}
               >
-                <span className="flex items-center gap-3 font-bold">
-                  <span className="w-5 text-sm text-muted">{i + 1}.</span>
-                  <Avatar
-                    username={entry.username}
-                    avatarUrl={entry.avatar_url}
-                    size={32}
-                    className={isLoser ? "border-danger/40" : ""}
-                  />
-                  {entry.username}
-                </span>
-                <span
-                  className={`text-xs font-bold uppercase tracking-widest ${
-                    isLoser ? "text-danger" : "text-muted"
-                  }`}
+                <Link
+                  href={entry.id === user.id ? "/profil" : `/korisnik/${entry.id}`}
+                  className="flex h-14 items-center justify-between px-4"
                 >
-                  {entry.days}/{entry.possible} · {formatPct(entry)}
-                </span>
+                  <span className="flex items-center gap-3 font-bold">
+                    <span className="w-5 text-sm text-muted">{i + 1}.</span>
+                    <Avatar
+                      username={entry.username}
+                      avatarUrl={entry.avatar_url}
+                      size={32}
+                      className={isLoser ? "border-danger/40" : ""}
+                    />
+                    {entry.username}
+                  </span>
+                  <span
+                    className={`text-xs font-bold uppercase tracking-widest ${
+                      isLoser ? "text-danger" : "text-muted"
+                    }`}
+                  >
+                    {entry.days}/{entry.possible} · {formatPct(entry)}
+                  </span>
+                </Link>
               </li>
             );
           })}

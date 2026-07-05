@@ -16,7 +16,7 @@ export default async function Home() {
     supabase.from("profiles").select("id, username, avatar_url").order("username"),
     supabase
       .from("checkins")
-      .select("user_id, checked_in_at")
+      .select("id, user_id, checked_in_at, cancelled_at")
       .gte("checked_in_at", dayStart.toISOString())
       .order("checked_in_at", { ascending: true }),
   ]);

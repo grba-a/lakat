@@ -20,11 +20,13 @@ export async function checkIn() {
 
   const dayStart = getCurrentDayStart();
 
-  // Dupli checkin u istom danu blokiramo i na serveru, ne samo disabled gumbom
+  // Dupli AKTIVNI checkin u istom danu blokiramo i na serveru; nakon
+  // poništenja se smiješ vratiti (novi red)
   const { data: existing, error: checkError } = await supabase
     .from("checkins")
     .select("id")
     .eq("user_id", user.id)
+    .is("cancelled_at", null)
     .gte("checked_in_at", dayStart.toISOString())
     .limit(1);
 
@@ -52,5 +54,41 @@ export async function checkIn() {
     // ignoriraj: checkin je prošao, obavijesti su best-effort
   }
 
+  return { ok: true };
+}
+
+export async function cancelCheckIn() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const dayStart = getCurrentDayStart();
+
+  const { data: rows, error: findError } = await supabase
+    .from("checkins")
+    .select("id")
+    .eq("user_id", user.id)
+    .is("cancelled_at", null)
+    .gte("checked_in_at", dayStart.toISOString())
+    .order("checked_in_at", { ascending: false })
+    .limit(1);
+
+  if (findError) {
+    return { error: `Nešto je puklo: ${findError.message}` };
+  }
+  if (!rows?.length) {
+    return { error: "Nemaš aktivan check-in. Od čega bježiš?" };
+  }
+
+  const { error } = await supabase
+    .from("checkins")
+    .update({ cancelled_at: new Date().toISOString() })
+    .eq("id", rows[0].id);
+
+  if (error) {
+    return { error: `Poništavanje nije prošlo: ${error.message}` };
+  }
   return { ok: true };
 }
