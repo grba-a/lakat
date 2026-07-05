@@ -119,7 +119,7 @@ export default async function ShamePage() {
             <p className="mt-2 text-sm text-muted">
               {winners.length > 1 ? "Dijele šank s" : "Drži šank s"}{" "}
               <span className="font-bold text-accent">{formatPct(winners[0])}</span>{" "}
-              dolazaka. Svaka čast, mašalo.
+              dolazaka. {winners.length > 1 ? "Koji ste vi pjanci e." : "Koji si ti pjanac e."}
             </p>
           </div>
         </section>
