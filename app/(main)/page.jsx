@@ -13,7 +13,7 @@ export default async function Home() {
 
   const dayStart = getCurrentDayStart();
   const [{ data: profiles }, { data: checkins }] = await Promise.all([
-    supabase.from("profiles").select("id, username").order("username"),
+    supabase.from("profiles").select("id, username, avatar_url").order("username"),
     supabase
       .from("checkins")
       .select("user_id, checked_in_at")

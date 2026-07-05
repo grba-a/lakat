@@ -4,6 +4,9 @@ import { fetchAllCheckins } from "@/lib/checkins";
 import { getDayKey } from "@/lib/day";
 import { userDaySets, computeStreaks, daysBetween } from "@/lib/stats";
 import PushToggle from "./push-toggle";
+import AvatarUploader from "./avatar-uploader";
+import UsernameForm from "./username-form";
+import PasswordForm from "./password-form";
 
 const dateFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -29,7 +32,7 @@ export default async function ProfilPage() {
   const [{ data: profile }, checkins] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, created_at")
+      .select("username, created_at, avatar_url")
       .eq("id", user.id)
       .maybeSingle(),
     fetchAllCheckins(supabase, user.id),
@@ -52,15 +55,22 @@ export default async function ProfilPage() {
 
   return (
     <main className="flex flex-1 flex-col">
-      <section className="mt-8">
-        <h1 className="font-display text-5xl uppercase leading-none tracking-tight">
-          {profile?.username ?? "Bezimeni"}
-          <span className="text-accent">.</span>
-        </h1>
-        <p className="mt-3 text-sm text-muted">
-          <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
-          U ekipi od {dateFmt.format(new Date(profile?.created_at ?? Date.now()))}
-        </p>
+      <section className="mt-8 flex items-center gap-5">
+        <AvatarUploader
+          userId={user.id}
+          username={profile?.username}
+          avatarUrl={profile?.avatar_url}
+        />
+        <div>
+          <h1 className="font-display text-5xl uppercase leading-none tracking-tight">
+            {profile?.username ?? "Bezimeni"}
+            <span className="text-accent">.</span>
+          </h1>
+          <p className="mt-3 text-sm text-muted">
+            <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
+            U ekipi od {dateFmt.format(new Date(profile?.created_at ?? Date.now()))}
+          </p>
+        </div>
       </section>
 
       <section className="stagger mt-10 grid grid-cols-2 gap-3">
@@ -83,6 +93,20 @@ export default async function ProfilPage() {
       <p className="mt-6 text-sm text-muted">{comment(pct)}</p>
 
       <PushToggle vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
+
+      <section className="mt-10">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
+          Postavke
+        </h2>
+        <div className="stagger mt-4 flex flex-col gap-3">
+          <div style={{ "--stagger-i": 0 }}>
+            <UsernameForm username={profile?.username ?? ""} />
+          </div>
+          <div style={{ "--stagger-i": 1 }}>
+            <PasswordForm />
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

@@ -16,9 +16,6 @@ const archivo = Archivo({
 export const metadata = {
   title: "Lakat",
   description: "Tko je za šankom, a tko je pička. Uživo.",
-  icons: {
-    apple: "/icon-192.png",
-  },
   appleWebApp: {
     capable: true,
     title: "Lakat",

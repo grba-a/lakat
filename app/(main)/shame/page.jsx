@@ -9,6 +9,7 @@ import {
   monthOf,
   nextMonth,
 } from "@/lib/stats";
+import Avatar from "../avatar";
 
 const monthFmt = new Intl.DateTimeFormat("hr-HR", {
   month: "long",
@@ -32,7 +33,7 @@ export default async function ShamePage() {
   if (!user) redirect("/login");
 
   const [{ data: profiles }, checkins] = await Promise.all([
-    supabase.from("profiles").select("id, username, created_at"),
+    supabase.from("profiles").select("id, username, created_at, avatar_url"),
     fetchAllCheckins(supabase),
   ]);
 
@@ -108,6 +109,12 @@ export default async function ShamePage() {
               >
                 <span className="flex items-center gap-3 font-bold">
                   <span className="w-5 text-sm text-muted">{i + 1}.</span>
+                  <Avatar
+                    username={entry.username}
+                    avatarUrl={entry.avatar_url}
+                    size={32}
+                    className={isLoser ? "border-danger/40" : ""}
+                  />
                   {entry.username}
                 </span>
                 <span
@@ -142,7 +149,20 @@ export default async function ShamePage() {
                 <span className="text-sm capitalize text-muted">
                   {formatMonth(monthKey)}
                 </span>
-                <span className="font-bold text-danger">
+                <span className="flex items-center gap-2 font-bold text-danger">
+                  {monthLosers.length > 0 && (
+                    <span className="flex -space-x-1.5">
+                      {monthLosers.map((l) => (
+                        <Avatar
+                          key={l.id}
+                          username={l.username}
+                          avatarUrl={l.avatar_url}
+                          size={24}
+                          className="border-danger/40"
+                        />
+                      ))}
+                    </span>
+                  )}
                   {monthLosers.length
                     ? monthLosers.map((l) => l.username).join(" & ")
                     : "—"}

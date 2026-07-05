@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getCurrentDayStart } from "@/lib/day";
 import { checkIn } from "@/app/actions";
+import Avatar from "./avatar";
 
 const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -133,7 +134,12 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
               style={{ "--stagger-i": Math.min(i, 8) }}
             >
               <span className="flex items-center gap-3 font-bold">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                <Avatar
+                  username={p.username}
+                  avatarUrl={p.avatar_url}
+                  size={32}
+                  className="border-accent/40"
+                />
                 {p.username}
               </span>
               <span className="text-xs font-bold uppercase tracking-widest text-accent">
@@ -147,7 +153,10 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
               className="surface-2 flex h-14 items-center justify-between rounded-row px-4 opacity-40 transition-opacity duration-300"
               style={{ "--stagger-i": Math.min(present.length + i, 8) }}
             >
-              <span className="font-bold">{p.username}</span>
+              <span className="flex items-center gap-3 font-bold">
+                <Avatar username={p.username} avatarUrl={p.avatar_url} size={32} />
+                {p.username}
+              </span>
               <span className="text-xs font-bold uppercase tracking-widest text-muted">
                 Nema ga
               </span>
