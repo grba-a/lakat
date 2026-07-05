@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { react } from "@/app/actions";
 import PhotoLightbox from "./photo-lightbox";
+import ReactionBar, { toggleReaction } from "./reaction-bar";
 
 const dateFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -9,11 +11,51 @@ const dateFmt = new Intl.DateTimeFormat("hr-HR", {
   month: "numeric",
 });
 
-// Grid zadnjih dokaznih slika (beer with me stil) — tap za fullscreen
-export default function Memorije({ items, flashbacks = [] }) {
+// Grid dokaznih slika (beer with me stil) — tap za fullscreen + reakcije
+export default function Memorije({ items, flashbacks = [], myId, initialReactions = {} }) {
   const [lightbox, setLightbox] = useState(null);
+  const [reactions, setReactions] = useState(initialReactions);
+  const [, startTransition] = useTransition();
 
   if (!items.length && !flashbacks.length) return null;
+
+  function handleReaction(checkinId, emoji) {
+    setReactions((prev) => ({
+      ...prev,
+      [checkinId]: toggleReaction(prev[checkinId] ?? [], myId, emoji),
+    }));
+    startTransition(async () => {
+      await react(checkinId, emoji);
+    });
+  }
+
+  function Tile({ item, caption, borderClass, label }) {
+    const count = reactions[item.id]?.length ?? 0;
+    return (
+      <button
+        type="button"
+        onClick={() => setLightbox({ url: item.photo_url, caption, checkinId: item.id })}
+        className={`pressable relative aspect-square overflow-hidden rounded-card border ${borderClass}`}
+        aria-label={label}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={item.photo_url}
+          alt=""
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
+        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4 text-left text-[10px] font-bold uppercase tracking-wider text-foreground">
+          {caption}
+        </span>
+        {count > 0 && (
+          <span className="absolute right-1.5 top-1.5 rounded-full border border-white/10 bg-black/70 px-1.5 text-[10px] font-bold leading-4 text-foreground">
+            {count}
+          </span>
+        )}
+      </button>
+    );
+  }
 
   return (
     <section className="mb-4 mt-12">
@@ -24,30 +66,14 @@ export default function Memorije({ items, flashbacks = [] }) {
           </h2>
           <div className="stagger mt-4 grid grid-cols-3 gap-2">
             {flashbacks.map((item, i) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() =>
-                  setLightbox({
-                    url: item.photo_url,
-                    caption: `${item.username} · ${item.label}`,
-                  })
-                }
-                className="pressable relative aspect-square overflow-hidden rounded-card border border-accent/25"
-                style={{ "--stagger-i": Math.min(i, 8) }}
-                aria-label={`Flashback: ${item.username}, ${item.label}`}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={item.photo_url}
-                  alt=""
-                  loading="lazy"
-                  className="h-full w-full object-cover"
+              <div key={item.id} style={{ "--stagger-i": Math.min(i, 8) }}>
+                <Tile
+                  item={item}
+                  caption={`${item.username} · ${item.label}`}
+                  borderClass="border-accent/25"
+                  label={`Flashback: ${item.username}, ${item.label}`}
                 />
-                <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4 text-left text-[10px] font-bold uppercase tracking-wider text-foreground">
-                  {item.username} · {item.label}
-                </span>
-              </button>
+              </div>
             ))}
           </div>
         </div>
@@ -58,30 +84,14 @@ export default function Memorije({ items, flashbacks = [] }) {
       </h2>
       <div className="stagger mt-4 grid grid-cols-3 gap-2">
         {items.map((item, i) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() =>
-              setLightbox({
-                url: item.photo_url,
-                caption: `${item.username} · ${dateFmt.format(new Date(item.checked_in_at))}`,
-              })
-            }
-            className="pressable relative aspect-square overflow-hidden rounded-card border border-white/10"
-            style={{ "--stagger-i": Math.min(i, 8) }}
-            aria-label={`Memorija: ${item.username}`}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={item.photo_url}
-              alt=""
-              loading="lazy"
-              className="h-full w-full object-cover"
+          <div key={item.id} style={{ "--stagger-i": Math.min(i, 8) }}>
+            <Tile
+              item={item}
+              caption={`${item.username} · ${dateFmt.format(new Date(item.checked_in_at))}`}
+              borderClass="border-white/10"
+              label={`Memorija: ${item.username}`}
             />
-            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4 text-left text-[10px] font-bold uppercase tracking-wider text-foreground">
-              {item.username}
-            </span>
-          </button>
+          </div>
         ))}
       </div>
 
@@ -89,7 +99,15 @@ export default function Memorije({ items, flashbacks = [] }) {
         url={lightbox?.url}
         caption={lightbox?.caption}
         onClose={() => setLightbox(null)}
-      />
+      >
+        {lightbox?.checkinId && (
+          <ReactionBar
+            rows={reactions[lightbox.checkinId] ?? []}
+            myId={myId}
+            onToggle={(emoji) => handleReaction(lightbox.checkinId, emoji)}
+          />
+        )}
+      </PhotoLightbox>
     </section>
   );
 }

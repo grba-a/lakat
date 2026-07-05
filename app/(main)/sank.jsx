@@ -5,9 +5,10 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getCurrentDayStart } from "@/lib/day";
 import { downscaleToBlob } from "@/lib/image";
-import { checkIn, cancelCheckIn } from "@/app/actions";
+import { checkIn, cancelCheckIn, najaviDolazak, react } from "@/app/actions";
 import Avatar from "./avatar";
 import PhotoLightbox from "./photo-lightbox";
+import ReactionBar, { toggleReaction } from "./reaction-bar";
 
 const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -16,8 +17,16 @@ const timeFmt = new Intl.DateTimeFormat("hr-HR", {
 });
 
 const PHOTO_MAX_SIDE = 1024;
+const NAJAVA_TRAJANJE_MS = 45 * 60 * 1000;
 
-export default function Sank({ profiles, initialCheckins, currentUserId, titles = {} }) {
+export default function Sank({
+  profiles,
+  initialCheckins,
+  currentUserId,
+  titles = {},
+  initialNajave = [],
+  initialReactions = {},
+}) {
   // Svi današnji checkin REDOVI po id-u (jedan korisnik može imati više:
   // checkin -> poništi -> novi checkin). Realtime UPDATE mijenja red po id-u.
   const [rows, setRows] = useState(() => {
@@ -25,6 +34,14 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
     for (const c of initialCheckins) map[c.id] = c;
     return map;
   });
+  const [najave, setNajave] = useState(() => {
+    const map = {};
+    for (const n of initialNajave) map[n.id] = n;
+    return map;
+  });
+  // checkinId -> [{ user_id, emoji }]
+  const [reactions, setReactions] = useState(initialReactions);
+  const [now, setNow] = useState(() => Date.now());
   const [dayStartIso, setDayStartIso] = useState(() =>
     getCurrentDayStart().toISOString()
   );
@@ -57,18 +74,45 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
           );
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "najave" },
+        (payload) => {
+          setNajave((prev) => ({ ...prev, [payload.new.id]: payload.new }));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "reactions" },
+        (payload) => {
+          const row = payload.eventType === "DELETE" ? payload.old : payload.new;
+          if (!row?.checkin_id) return;
+          setReactions((prev) => {
+            const rest = (prev[row.checkin_id] ?? []).filter(
+              (r) => r.user_id !== row.user_id
+            );
+            return {
+              ...prev,
+              [row.checkin_id]:
+                payload.eventType === "DELETE"
+                  ? rest
+                  : [...rest, { user_id: row.user_id, emoji: row.emoji }],
+            };
+          });
+        }
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
 
-  // Nakon 06:00 svi se resetiraju u sivo i bez refresha
+  // Nakon 06:00 svi se resetiraju u sivo, najave istječu — bez refresha
   useEffect(() => {
-    const timer = setInterval(
-      () => setDayStartIso(getCurrentDayStart().toISOString()),
-      60_000
-    );
+    const timer = setInterval(() => {
+      setDayStartIso(getCurrentDayStart().toISOString());
+      setNow(Date.now());
+    }, 60_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -81,8 +125,9 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
     return () => input.removeEventListener("cancel", onCancel);
   }, []);
 
-  // Po korisniku: najraniji aktivni checkin (dolazak + slika) i najkasnije poništenje
-  const { present, fled, absent } = useMemo(() => {
+  // Po korisniku: najraniji aktivni checkin (dolazak + slika), najkasnije
+  // poništenje i najsvježija živa najava dolaska
+  const { present, arriving, fled, absent } = useMemo(() => {
     const byUser = new Map();
     for (const row of Object.values(rows)) {
       if (row.checked_in_at < dayStartIso) continue;
@@ -97,17 +142,30 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
       byUser.set(row.user_id, u);
     }
 
+    const najavaCutoff = new Date(now - NAJAVA_TRAJANJE_MS).toISOString();
+    const arrivingAt = new Map();
+    for (const n of Object.values(najave)) {
+      if (n.created_at < najavaCutoff) continue;
+      const prev = arrivingAt.get(n.user_id);
+      if (!prev || n.created_at > prev) arrivingAt.set(n.user_id, n.created_at);
+    }
+
     const present = [];
+    const arriving = [];
     const fled = [];
     const absent = [];
     for (const p of profiles) {
       const u = byUser.get(p.id);
+      const announcedAt = arrivingAt.get(p.id);
       if (u?.active) {
         present.push({
           ...p,
+          checkinId: u.active.id,
           arrivedAt: u.active.checked_in_at,
           photoUrl: u.active.photo_url ?? null,
         });
+      } else if (announcedAt && (!u?.cancelledAt || announcedAt > u.cancelledAt)) {
+        arriving.push({ ...p, announcedAt });
       } else if (u?.cancelledAt) {
         fled.push({ ...p, cancelledAt: u.cancelledAt });
       } else {
@@ -115,11 +173,13 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
       }
     }
     present.sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt));
+    arriving.sort((a, b) => b.announcedAt.localeCompare(a.announcedAt));
     fled.sort((a, b) => b.cancelledAt.localeCompare(a.cancelledAt));
-    return { present, fled, absent };
-  }, [profiles, rows, dayStartIso]);
+    return { present, arriving, fled, absent };
+  }, [profiles, rows, najave, now, dayStartIso]);
 
   const iAmPresent = present.some((p) => p.id === currentUserId);
+  const iAmArriving = arriving.some((p) => p.id === currentUserId);
 
   // Lokacija se traži paralelno s kamerom; odbijena/spora lokacija ne
   // blokira checkin (slika je dokaz, lokacija je bonus za mapu)
@@ -194,6 +254,38 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
     });
   }
 
+  function handleNajava() {
+    setError(null);
+    startTransition(async () => {
+      const result = await najaviDolazak();
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      setNajave((prev) => ({
+        ...prev,
+        [`tmp-najava-${currentUserId}`]: {
+          id: `tmp-najava-${currentUserId}`,
+          user_id: currentUserId,
+          created_at: new Date().toISOString(),
+        },
+      }));
+      setNow(Date.now());
+    });
+  }
+
+  function handleReaction(checkinId, emoji) {
+    // Optimistički odmah, server potvrđuje; realtime ionako ispravi
+    setReactions((prev) => ({
+      ...prev,
+      [checkinId]: toggleReaction(prev[checkinId] ?? [], currentUserId, emoji),
+    }));
+    startTransition(async () => {
+      const result = await react(checkinId, emoji);
+      if (result?.error) setError(result.error);
+    });
+  }
+
   function handleCancel() {
     setError(null);
     startTransition(async () => {
@@ -240,6 +332,7 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
     setLightbox({
       url: p.photoUrl,
       caption: `${p.username} · ${timeFmt.format(new Date(p.arrivedAt))}`,
+      checkinId: typeof p.checkinId === "number" ? p.checkinId : null,
     });
   }
 
@@ -275,6 +368,21 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
           className="pressable-soft mt-3 flex h-12 w-full items-center justify-center rounded-button border border-danger/30 bg-danger/10 font-display text-lg uppercase tracking-wide text-danger disabled:opacity-50"
         >
           {isPending ? "Sekunda..." : "Ipak bježim"}
+        </button>
+      )}
+
+      {!iAmPresent && (
+        <button
+          type="button"
+          onClick={handleNajava}
+          disabled={isPending || iAmArriving}
+          className="pressable-soft mt-3 flex h-12 w-full items-center justify-center rounded-button border border-amber-400/30 bg-amber-400/10 font-display text-lg uppercase tracking-wide text-amber-300 disabled:opacity-60"
+        >
+          {iAmArriving
+            ? "Najavljen si. Sad dođi."
+            : isPending
+              ? "Sekunda..."
+              : "Stižem."}
         </button>
       )}
 
@@ -357,7 +465,7 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
                     <button
                       type="button"
                       onClick={(e) => openPhoto(e, p)}
-                      className="pressable shrink-0"
+                      className="pressable relative shrink-0"
                       aria-label={`Dokazna slika: ${p.username}`}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -368,6 +476,11 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
                         height={40}
                         className="h-10 w-10 rounded-lg border border-accent/30 object-cover"
                       />
+                      {(reactions[p.checkinId]?.length ?? 0) > 0 && (
+                        <span className="absolute -bottom-1.5 -right-1.5 rounded-full border border-white/10 bg-black/80 px-1.5 text-[10px] font-bold leading-4 text-foreground">
+                          {reactions[p.checkinId].length}
+                        </span>
+                      )}
                     </button>
                   )}
                   <span className="text-xs font-bold uppercase tracking-widest text-accent">
@@ -377,11 +490,39 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
               </Link>
             </li>
           ))}
+          {arriving.map((p, i) => (
+            <li
+              key={p.id}
+              className="surface-2 pressable-soft rounded-row border-amber-400/25 bg-amber-400/[0.06]"
+              style={{ "--stagger-i": Math.min(present.length + i, 8) }}
+            >
+              <Link
+                href={profileHref(p.id)}
+                className="flex h-14 items-center justify-between px-4"
+              >
+                <span className="flex items-center gap-3 font-bold">
+                  <Avatar
+                    username={p.username}
+                    avatarUrl={p.avatar_url}
+                    size={32}
+                    className="border-amber-400/40"
+                  />
+                  <span className="flex flex-col">
+                    {p.username}
+                    <Title id={p.id} />
+                  </span>
+                </span>
+                <span className="text-xs font-bold uppercase tracking-widest text-amber-300">
+                  Stiže (navodno) · {timeFmt.format(new Date(p.announcedAt))}
+                </span>
+              </Link>
+            </li>
+          ))}
           {fled.map((p, i) => (
             <li
               key={p.id}
               className="surface-2 pressable-soft rounded-row border-danger/25 bg-danger/[0.06] opacity-70"
-              style={{ "--stagger-i": Math.min(present.length + i, 8) }}
+              style={{ "--stagger-i": Math.min(present.length + arriving.length + i, 8) }}
             >
               <Link
                 href={profileHref(p.id)}
@@ -409,7 +550,7 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
             <li
               key={p.id}
               className="surface-2 pressable-soft rounded-row opacity-40 transition-opacity duration-300"
-              style={{ "--stagger-i": Math.min(present.length + fled.length + i, 8) }}
+              style={{ "--stagger-i": Math.min(present.length + arriving.length + fled.length + i, 8) }}
             >
               <Link
                 href={profileHref(p.id)}
@@ -435,7 +576,15 @@ export default function Sank({ profiles, initialCheckins, currentUserId, titles 
         url={lightbox?.url}
         caption={lightbox?.caption}
         onClose={() => setLightbox(null)}
-      />
+      >
+        {lightbox?.checkinId && (
+          <ReactionBar
+            rows={reactions[lightbox.checkinId] ?? []}
+            myId={currentUserId}
+            onToggle={(emoji) => handleReaction(lightbox.checkinId, emoji)}
+          />
+        )}
+      </PhotoLightbox>
     </div>
   );
 }

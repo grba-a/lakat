@@ -1,7 +1,8 @@
 "use client";
 
-// Fullscreen pregled slike — tap bilo gdje zatvara
-export default function PhotoLightbox({ url, caption, onClose }) {
+// Fullscreen pregled slike — tap bilo gdje zatvara; children (npr.
+// reakcije) ne zatvaraju
+export default function PhotoLightbox({ url, caption, onClose, children }) {
   if (!url) return null;
 
   return (
@@ -15,13 +16,14 @@ export default function PhotoLightbox({ url, caption, onClose }) {
       <img
         src={url}
         alt={caption || ""}
-        className="max-h-[75dvh] w-auto max-w-full rounded-card border border-white/10 object-contain shadow-float"
+        className="max-h-[70dvh] w-auto max-w-full rounded-card border border-white/10 object-contain shadow-float"
       />
       {caption && (
         <p className="text-sm font-bold uppercase tracking-widest text-muted">
           {caption}
         </p>
       )}
+      {children && <div onClick={(e) => e.stopPropagation()}>{children}</div>}
       <p className="text-xs text-muted/60">Stisni bilo gdje za zatvoriti</p>
     </div>
   );

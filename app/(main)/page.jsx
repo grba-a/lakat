@@ -68,6 +68,36 @@ export default async function Home() {
   const allProfiles = profiles ?? [];
   const usernames = new Map(allProfiles.map((p) => [p.id, p.username]));
 
+  // Reakcije za sve slike na ekranu (današnji popis + memorije + flashback)
+  // i žive najave dolaska — jedan upit svaka
+  const flashbackRows = FLASHBACKS.flatMap((_, i) => flashbackResults[i]?.data ?? []);
+  const reactionIds = [
+    ...new Set(
+      [...(checkins ?? []), ...(memories ?? []), ...flashbackRows].map((c) => c.id)
+    ),
+  ];
+  const najavaCutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+  const [{ data: reactionRows }, { data: najave }] = await Promise.all([
+    reactionIds.length
+      ? supabase
+          .from("reactions")
+          .select("checkin_id, user_id, emoji")
+          .in("checkin_id", reactionIds)
+      : Promise.resolve({ data: [] }),
+    supabase
+      .from("najave")
+      .select("id, user_id, created_at")
+      .gte("created_at", najavaCutoff),
+  ]);
+
+  const reactionsByCheckin = {};
+  for (const r of reactionRows ?? []) {
+    (reactionsByCheckin[r.checkin_id] ??= []).push({
+      user_id: r.user_id,
+      emoji: r.emoji,
+    });
+  }
+
   // Titule: streak po korisniku + kruna za aktualnu pičku mjeseca
   const daySets = userDaySets(allCheckins);
   const todayKey = getDayKey(new Date());
@@ -105,8 +135,15 @@ export default async function Home() {
         initialCheckins={checkins ?? []}
         currentUserId={user.id}
         titles={titles}
+        initialNajave={najave ?? []}
+        initialReactions={reactionsByCheckin}
       />
-      <Memorije items={memoryItems} flashbacks={flashbackItems} />
+      <Memorije
+        items={memoryItems}
+        flashbacks={flashbackItems}
+        myId={user.id}
+        initialReactions={reactionsByCheckin}
+      />
       <InstallHint />
     </main>
   );

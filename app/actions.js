@@ -82,6 +82,99 @@ export async function checkIn(photoUrl, coords) {
   return { ok: true };
 }
 
+const REACTION_EMOJI = ["🔥", "🤮", "😂", "🫡", "🍺"];
+
+// Reakcija na sliku: ista = makni (toggle), druga = pregazi
+export async function react(checkinId, emoji) {
+  if (!REACTION_EMOJI.includes(emoji)) {
+    return { error: "Taj emoji ne postoji u ponudi, hakeru." };
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: existing } = await supabase
+    .from("reactions")
+    .select("id, emoji")
+    .eq("checkin_id", checkinId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (existing?.emoji === emoji) {
+    const { error } = await supabase.from("reactions").delete().eq("id", existing.id);
+    if (error) return { error: `Nije prošlo: ${error.message}` };
+    return { ok: true, removed: true };
+  }
+
+  const { error } = await supabase
+    .from("reactions")
+    .upsert(
+      { checkin_id: checkinId, user_id: user.id, emoji },
+      { onConflict: "checkin_id,user_id" }
+    );
+  if (error) return { error: `Nije prošlo: ${error.message}` };
+  return { ok: true };
+}
+
+const NAJAVA_TRAJANJE_MS = 45 * 60 * 1000;
+
+// "Stižem." — najava dolaska, push ekipi, istekne za 45 min
+export async function najaviDolazak() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const dayStart = getCurrentDayStart();
+
+  const { data: active } = await supabase
+    .from("checkins")
+    .select("id")
+    .eq("user_id", user.id)
+    .is("cancelled_at", null)
+    .gte("checked_in_at", dayStart.toISOString())
+    .limit(1);
+  if (active?.length) {
+    return { error: "Već si za šankom, kamo točno stižeš?" };
+  }
+
+  const since = new Date(Date.now() - NAJAVA_TRAJANJE_MS).toISOString();
+  const { data: recent } = await supabase
+    .from("najave")
+    .select("id")
+    .eq("user_id", user.id)
+    .gte("created_at", since)
+    .limit(1);
+  if (recent?.length) {
+    return { already: true };
+  }
+
+  const { error } = await supabase.from("najave").insert({ user_id: user.id });
+  if (error) {
+    return { error: `Najava nije prošla: ${error.message}` };
+  }
+
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle();
+    await notifyOthers(
+      user.id,
+      profile?.username ?? "Netko",
+      `${profile?.username ?? "Netko"} kreće prema šanku. (Laže, kasnit će pola sata, klasika.)`
+    );
+  } catch {
+    // najava je prošla, push je best-effort
+  }
+
+  return { ok: true };
+}
+
 export async function cancelCheckIn() {
   const supabase = await createClient();
   const {
