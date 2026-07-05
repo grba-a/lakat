@@ -7,6 +7,7 @@ import {
   userDaySets,
   monthRanking,
   worstOf,
+  bestOf,
   monthOf,
   nextMonth,
 } from "@/lib/stats";
@@ -50,6 +51,9 @@ export default async function ShamePage() {
     todayKey,
   });
   const losers = worstOf(ranking);
+  const winners = bestOf(ranking).filter(
+    (w) => !losers.some((l) => l.id === w.id)
+  );
 
   // Arhiva: svaki prošli mjesec od najranije registracije, najnoviji prvi
   const months = [];
@@ -62,12 +66,22 @@ export default async function ShamePage() {
     }
     months.reverse();
   }
-  const archive = months.map((monthKey) => ({
-    monthKey,
-    losers: worstOf(
-      monthRanking({ profiles: allProfiles, daySets, monthKey, todayKey })
-    ),
-  }));
+  const archive = months.map((monthKey) => {
+    const monthRank = monthRanking({
+      profiles: allProfiles,
+      daySets,
+      monthKey,
+      todayKey,
+    });
+    const monthLosers = worstOf(monthRank);
+    return {
+      monthKey,
+      losers: monthLosers,
+      winners: bestOf(monthRank).filter(
+        (w) => !monthLosers.some((l) => l.id === w.id)
+      ),
+    };
+  });
 
   return (
     <main className="flex flex-1 flex-col">
@@ -92,6 +106,24 @@ export default async function ShamePage() {
           </div>
         )}
       </section>
+
+      {winners.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-accent">
+            Inventar mjeseca 🏆
+          </h2>
+          <div className="mt-3 rounded-card border border-accent/30 bg-accent/10 px-5 py-5 shadow-glow">
+            <p className="font-display text-4xl uppercase leading-none tracking-tight text-accent">
+              {winners.map((w) => w.username).join(" & ")}
+            </p>
+            <p className="mt-2 text-sm text-muted">
+              {winners.length > 1 ? "Dijele šank s" : "Drži šank s"}{" "}
+              <span className="font-bold text-accent">{formatPct(winners[0])}</span>{" "}
+              dolazaka. Svaka čast, mašalo.
+            </p>
+          </div>
+        </section>
+      )}
 
       <section className="mt-10">
         <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
@@ -146,32 +178,39 @@ export default async function ShamePage() {
           </p>
         ) : (
           <ul className="stagger mt-4 flex flex-col gap-2">
-            {archive.map(({ monthKey, losers: monthLosers }, i) => (
+            {archive.map(({ monthKey, losers: monthLosers, winners: monthWinners }, i) => (
               <li
                 key={monthKey}
-                className="surface-2 flex h-14 items-center justify-between rounded-row px-4"
+                className="surface-2 flex min-h-14 items-center justify-between rounded-row px-4 py-2"
                 style={{ "--stagger-i": Math.min(i, 8) }}
               >
                 <span className="text-sm capitalize text-muted">
                   {formatMonth(monthKey)}
                 </span>
-                <span className="flex items-center gap-2 font-bold text-danger">
-                  {monthLosers.length > 0 && (
-                    <span className="flex -space-x-1.5">
-                      {monthLosers.map((l) => (
-                        <Avatar
-                          key={l.id}
-                          username={l.username}
-                          avatarUrl={l.avatar_url}
-                          size={24}
-                          className="border-danger/40"
-                        />
-                      ))}
+                <span className="flex flex-col items-end gap-1">
+                  {monthWinners.length > 0 && (
+                    <span className="text-xs font-bold text-accent">
+                      🏆 {monthWinners.map((w) => w.username).join(" & ")}
                     </span>
                   )}
-                  {monthLosers.length
-                    ? monthLosers.map((l) => l.username).join(" & ")
-                    : "—"}
+                  <span className="flex items-center gap-2 font-bold text-danger">
+                    {monthLosers.length > 0 && (
+                      <span className="flex -space-x-1.5">
+                        {monthLosers.map((l) => (
+                          <Avatar
+                            key={l.id}
+                            username={l.username}
+                            avatarUrl={l.avatar_url}
+                            size={24}
+                            className="border-danger/40"
+                          />
+                        ))}
+                      </span>
+                    )}
+                    {monthLosers.length
+                      ? `💩 ${monthLosers.map((l) => l.username).join(" & ")}`
+                      : "—"}
+                  </span>
                 </span>
               </li>
             ))}

@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllCheckins } from "@/lib/checkins";
 import { getDayKey } from "@/lib/day";
-import { userDaySets, computeStreaks, daysBetween } from "@/lib/stats";
+import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
+import Heatmap from "../heatmap";
 import PushToggle from "./push-toggle";
 import AvatarUploader from "./avatar-uploader";
 import UsernameForm from "./username-form";
@@ -45,6 +46,7 @@ export default async function ProfilPage() {
   const total = daySet.size;
   const pct = possible > 0 ? Math.round((total / possible) * 100) : 0;
   const { current, longest } = computeStreaks(daySet, todayKey);
+  const title = titleFor(current);
 
   const stats = [
     { value: total, label: "dolazaka" },
@@ -66,6 +68,11 @@ export default async function ProfilPage() {
             {profile?.username ?? "Bezimeni"}
             <span className="text-accent">.</span>
           </h1>
+          {title && (
+            <p className="mt-2 text-xs font-bold uppercase tracking-widest text-accent">
+              {title}
+            </p>
+          )}
           <p className="mt-3 text-sm text-muted">
             <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
             U ekipi od {dateFmt.format(new Date(profile?.created_at ?? Date.now()))}
@@ -91,6 +98,8 @@ export default async function ProfilPage() {
       </section>
 
       <p className="mt-6 text-sm text-muted">{comment(pct)}</p>
+
+      <Heatmap daySet={daySet} todayKey={todayKey} />
 
       <PushToggle vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
 

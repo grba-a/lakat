@@ -3,8 +3,9 @@ import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllCheckins } from "@/lib/checkins";
 import { getDayKey } from "@/lib/day";
-import { userDaySets, computeStreaks, daysBetween } from "@/lib/stats";
+import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
 import Avatar from "../../avatar";
+import Heatmap from "../../heatmap";
 
 const dateFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -47,6 +48,7 @@ export default async function KorisnikPage({ params }) {
   const total = daySet.size;
   const pct = possible > 0 ? Math.round((total / possible) * 100) : 0;
   const { current, longest } = computeStreaks(daySet, todayKey);
+  const title = titleFor(current);
 
   const stats = [
     { value: total, label: "dolazaka" },
@@ -71,6 +73,11 @@ export default async function KorisnikPage({ params }) {
             {profile.username}
             <span className="text-accent">.</span>
           </h1>
+          {title && (
+            <p className="mt-2 text-xs font-bold uppercase tracking-widest text-accent">
+              {title}
+            </p>
+          )}
           <p className="mt-3 text-sm text-muted">
             <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
             U ekipi od {dateFmt.format(new Date(profile.created_at))}
@@ -96,6 +103,8 @@ export default async function KorisnikPage({ params }) {
       </section>
 
       <p className="mt-6 text-sm text-muted">{comment(pct)}</p>
+
+      <Heatmap daySet={daySet} todayKey={todayKey} />
     </main>
   );
 }

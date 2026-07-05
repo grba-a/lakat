@@ -10,13 +10,49 @@ const dateFmt = new Intl.DateTimeFormat("hr-HR", {
 });
 
 // Grid zadnjih dokaznih slika (beer with me stil) — tap za fullscreen
-export default function Memorije({ items }) {
+export default function Memorije({ items, flashbacks = [] }) {
   const [lightbox, setLightbox] = useState(null);
 
-  if (!items.length) return null;
+  if (!items.length && !flashbacks.length) return null;
 
   return (
     <section className="mb-4 mt-12">
+      {flashbacks.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-accent">
+            Na današnji dan 📅
+          </h2>
+          <div className="stagger mt-4 grid grid-cols-3 gap-2">
+            {flashbacks.map((item, i) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() =>
+                  setLightbox({
+                    url: item.photo_url,
+                    caption: `${item.username} · ${item.label}`,
+                  })
+                }
+                className="pressable relative aspect-square overflow-hidden rounded-card border border-accent/25"
+                style={{ "--stagger-i": Math.min(i, 8) }}
+                aria-label={`Flashback: ${item.username}, ${item.label}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.photo_url}
+                  alt=""
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
+                <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4 text-left text-[10px] font-bold uppercase tracking-wider text-foreground">
+                  {item.username} · {item.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
         Memorije
       </h2>

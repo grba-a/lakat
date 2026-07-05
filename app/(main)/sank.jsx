@@ -17,7 +17,7 @@ const timeFmt = new Intl.DateTimeFormat("hr-HR", {
 
 const PHOTO_MAX_SIDE = 1024;
 
-export default function Sank({ profiles, initialCheckins, currentUserId }) {
+export default function Sank({ profiles, initialCheckins, currentUserId, titles = {} }) {
   // Svi današnji checkin REDOVI po id-u (jedan korisnik može imati više:
   // checkin -> poništi -> novi checkin). Realtime UPDATE mijenja red po id-u.
   const [rows, setRows] = useState(() => {
@@ -220,6 +220,20 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
     return id === currentUserId ? "/profil" : `/korisnik/${id}`;
   }
 
+  function Title({ id }) {
+    const title = titles[id];
+    if (!title) return null;
+    return (
+      <span
+        className={`text-[10px] font-bold uppercase tracking-wider ${
+          title.startsWith("Pička") ? "text-danger" : "text-accent/80"
+        }`}
+      >
+        {title}
+      </span>
+    );
+  }
+
   function openPhoto(e, p) {
     e.preventDefault();
     e.stopPropagation();
@@ -330,6 +344,7 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
                   />
                   <span className="flex flex-col">
                     {p.username}
+                    <Title id={p.id} />
                     {!p.photoUrl && (
                       <span className="text-[10px] font-bold uppercase tracking-wider text-danger">
                         Slikaj nam gdje si smrade.
@@ -379,7 +394,10 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
                     size={32}
                     className="border-danger/40"
                   />
-                  {p.username}
+                  <span className="flex flex-col">
+                    {p.username}
+                    <Title id={p.id} />
+                  </span>
                 </span>
                 <span className="text-xs font-bold uppercase tracking-widest text-danger">
                   Pobjegao u {timeFmt.format(new Date(p.cancelledAt))}
@@ -399,7 +417,10 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
               >
                 <span className="flex items-center gap-3 font-bold">
                   <Avatar username={p.username} avatarUrl={p.avatar_url} size={32} />
-                  {p.username}
+                  <span className="flex flex-col">
+                    {p.username}
+                    <Title id={p.id} />
+                  </span>
                 </span>
                 <span className="text-xs font-bold uppercase tracking-widest text-muted">
                   Nema ga
