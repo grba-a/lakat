@@ -13,7 +13,43 @@ export default function AvatarUploader({ userId, username, avatarUrl }) {
   const inputRef = useRef(null);
   const router = useRouter();
   const [error, setError] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  // Bez slike: tap odmah otvara picker. Sa slikom: tap otvara izbor
+  // Promijeni/Izbriši (čisto, bez plusa i teksta).
+  function handleTap() {
+    setError(null);
+    if (!avatarUrl) {
+      inputRef.current?.click();
+      return;
+    }
+    setMenuOpen((open) => !open);
+  }
+
+  function handleChangeClick() {
+    setMenuOpen(false);
+    inputRef.current?.click();
+  }
+
+  function handleDelete() {
+    setMenuOpen(false);
+    setError(null);
+    startTransition(async () => {
+      try {
+        const supabase = createClient();
+        await supabase.storage.from("avatars").remove([`${userId}/avatar.jpg`]);
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ avatar_url: null })
+          .eq("id", userId);
+        if (updateError) throw new Error(updateError.message);
+        router.refresh();
+      } catch {
+        setError("Brisanje nije prošlo. Slika te ne pušta.");
+      }
+    });
+  }
 
   function handlePick(e) {
     const file = e.target.files?.[0];
@@ -60,19 +96,47 @@ export default function AvatarUploader({ userId, username, avatarUrl }) {
     <div className="flex flex-col items-center gap-2">
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
+        onClick={handleTap}
         disabled={isPending}
-        className="pressable relative rounded-full disabled:opacity-50"
-        aria-label="Promijeni profilnu sliku"
+        className="pressable rounded-full disabled:opacity-50"
+        aria-label={avatarUrl ? "Uredi profilnu sliku" : "Dodaj profilnu sliku"}
       >
-        <Avatar username={username} avatarUrl={avatarUrl} size={80} />
-        <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-sm font-bold text-black shadow-soft">
-          +
-        </span>
+        {avatarUrl ? (
+          <Avatar username={username} avatarUrl={avatarUrl} size={80} />
+        ) : (
+          <span
+            style={{ width: 80, height: 80 }}
+            className="flex items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-4xl font-bold leading-none text-accent"
+          >
+            +
+          </span>
+        )}
       </button>
-      <span className="text-xs text-muted">
-        {isPending ? "Sekunda..." : "Promijeni sliku"}
-      </span>
+
+      {isPending && <span className="text-xs text-muted">Sekunda...</span>}
+      {!avatarUrl && !isPending && (
+        <span className="text-xs text-muted">Dodaj sliku</span>
+      )}
+
+      {menuOpen && avatarUrl && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleChangeClick}
+            className="surface-2 pressable-soft rounded-full px-3 py-2 text-xs font-bold uppercase tracking-widest text-foreground"
+          >
+            Promijeni
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="pressable-soft rounded-full border border-danger/30 bg-danger/10 px-3 py-2 text-xs font-bold uppercase tracking-widest text-danger"
+          >
+            Izbriši
+          </button>
+        </div>
+      )}
+
       <input
         ref={inputRef}
         type="file"
