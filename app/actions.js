@@ -11,12 +11,20 @@ export async function logout() {
   redirect("/login");
 }
 
-export async function checkIn() {
+export async function checkIn(photoUrl) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Slika smije biti samo iz vlastite mape u dokazi bucketu — sve drugo
+  // se tiho odbacuje (nitko ne podmeće tuđe/vanjske URL-ove)
+  let photo_url = null;
+  if (typeof photoUrl === "string") {
+    const prefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/dokazi/${user.id}/`;
+    if (photoUrl.startsWith(prefix)) photo_url = photoUrl;
+  }
 
   const dayStart = getCurrentDayStart();
 
@@ -37,7 +45,9 @@ export async function checkIn() {
     return { already: true };
   }
 
-  const { error } = await supabase.from("checkins").insert({ user_id: user.id });
+  const { error } = await supabase
+    .from("checkins")
+    .insert({ user_id: user.id, photo_url });
   if (error) {
     return { error: `Checkin nije prošao: ${error.message}` };
   }

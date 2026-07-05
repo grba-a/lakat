@@ -1,17 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getCurrentDayStart } from "@/lib/day";
+import { downscaleToBlob } from "@/lib/image";
 import { checkIn, cancelCheckIn } from "@/app/actions";
 import Avatar from "./avatar";
+import PhotoLightbox from "./photo-lightbox";
 
 const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
   hour: "2-digit",
   minute: "2-digit",
 });
+
+const PHOTO_MAX_SIDE = 1024;
 
 export default function Sank({ profiles, initialCheckins, currentUserId }) {
   // Svi današnji checkin REDOVI po id-u (jedan korisnik može imati više:
@@ -25,7 +29,10 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
     getCurrentDayStart().toISOString()
   );
   const [error, setError] = useState(null);
+  const [askPhoto, setAskPhoto] = useState(false);
+  const [lightbox, setLightbox] = useState(null); // { url, caption }
   const [isPending, startTransition] = useTransition();
+  const cameraRef = useRef(null);
 
   // Realtime: INSERT (novi checkin) + UPDATE (poništenje) osvježavaju sve
   useEffect(() => {
@@ -64,15 +71,24 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
     return () => clearInterval(timer);
   }, []);
 
-  // Po korisniku: najraniji aktivni checkin (dolazak) i najkasnije poništenje
+  // Zatvorena kamera bez slike (podržano u novijim browserima) -> ponudi ulaz bez dokaza
+  useEffect(() => {
+    const input = cameraRef.current;
+    if (!input) return;
+    const onCancel = () => setAskPhoto(true);
+    input.addEventListener("cancel", onCancel);
+    return () => input.removeEventListener("cancel", onCancel);
+  }, []);
+
+  // Po korisniku: najraniji aktivni checkin (dolazak + slika) i najkasnije poništenje
   const { present, fled, absent } = useMemo(() => {
     const byUser = new Map();
     for (const row of Object.values(rows)) {
       if (row.checked_in_at < dayStartIso) continue;
-      const u = byUser.get(row.user_id) ?? { activeAt: null, cancelledAt: null };
+      const u = byUser.get(row.user_id) ?? { active: null, cancelledAt: null };
       if (!row.cancelled_at) {
-        if (!u.activeAt || row.checked_in_at < u.activeAt) {
-          u.activeAt = row.checked_in_at;
+        if (!u.active || row.checked_in_at < u.active.checked_in_at) {
+          u.active = row;
         }
       } else if (!u.cancelledAt || row.cancelled_at > u.cancelledAt) {
         u.cancelledAt = row.cancelled_at;
@@ -85,9 +101,17 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
     const absent = [];
     for (const p of profiles) {
       const u = byUser.get(p.id);
-      if (u?.activeAt) present.push({ ...p, arrivedAt: u.activeAt });
-      else if (u?.cancelledAt) fled.push({ ...p, cancelledAt: u.cancelledAt });
-      else absent.push(p);
+      if (u?.active) {
+        present.push({
+          ...p,
+          arrivedAt: u.active.checked_in_at,
+          photoUrl: u.active.photo_url ?? null,
+        });
+      } else if (u?.cancelledAt) {
+        fled.push({ ...p, cancelledAt: u.cancelledAt });
+      } else {
+        absent.push(p);
+      }
     }
     present.sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt));
     fled.sort((a, b) => b.cancelledAt.localeCompare(a.cancelledAt));
@@ -96,10 +120,11 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
 
   const iAmPresent = present.some((p) => p.id === currentUserId);
 
-  function handleCheckIn() {
+  function doCheckIn(photoUrl) {
+    setAskPhoto(false);
     setError(null);
     startTransition(async () => {
-      const result = await checkIn();
+      const result = await checkIn(photoUrl ?? undefined);
       if (result?.error) {
         setError(result.error);
         return;
@@ -113,8 +138,43 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
           user_id: currentUserId,
           checked_in_at: new Date().toISOString(),
           cancelled_at: null,
+          photo_url: photoUrl ?? null,
         },
       }));
+    });
+  }
+
+  // TU SAM prvo otvara kameru — slika je dokaz i objava dana
+  function handleCheckInClick() {
+    setError(null);
+    cameraRef.current?.click();
+  }
+
+  function handlePhoto(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) {
+      setAskPhoto(true);
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const blob = await downscaleToBlob(file, PHOTO_MAX_SIDE);
+        const supabase = createClient();
+        const path = `${currentUserId}/${Date.now()}.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from("dokazi")
+          .upload(path, blob, {
+            contentType: "image/jpeg",
+            cacheControl: "31536000",
+          });
+        if (uploadError) throw new Error(uploadError.message);
+        const { data } = supabase.storage.from("dokazi").getPublicUrl(path);
+        doCheckIn(data.publicUrl);
+      } catch {
+        setError("Slika nije prošla. Probaj opet ili uđi bez dokaza ko pička.");
+        setAskPhoto(true);
+      }
     });
   }
 
@@ -144,11 +204,29 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
     return id === currentUserId ? "/profil" : `/korisnik/${id}`;
   }
 
+  function openPhoto(e, p) {
+    e.preventDefault();
+    e.stopPropagation();
+    setLightbox({
+      url: p.photoUrl,
+      caption: `${p.username} · ${timeFmt.format(new Date(p.arrivedAt))}`,
+    });
+  }
+
   return (
     <div className="flex flex-1 flex-col">
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handlePhoto}
+        className="hidden"
+      />
+
       <button
         type="button"
-        onClick={handleCheckIn}
+        onClick={handleCheckInClick}
         disabled={iAmPresent || isPending}
         className={
           iAmPresent
@@ -168,6 +246,35 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
         >
           {isPending ? "Sekunda..." : "Ipak bježim"}
         </button>
+      )}
+
+      {askPhoto && !iAmPresent && (
+        <div className="glass mt-3 rounded-card p-4">
+          <p className="text-sm font-bold text-danger">
+            Slikaj nam gdje si smrade.
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Bez slike nema dokaza da si stvarno za šankom.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={handleCheckInClick}
+              disabled={isPending}
+              className="pressable-soft flex h-12 flex-1 items-center justify-center rounded-button bg-accent font-display text-lg uppercase tracking-wide text-black disabled:opacity-50"
+            >
+              Ajde, slikam
+            </button>
+            <button
+              type="button"
+              onClick={() => doCheckIn(null)}
+              disabled={isPending}
+              className="surface-2 pressable-soft flex h-12 flex-1 items-center justify-center rounded-button font-display text-lg uppercase tracking-wide text-muted disabled:opacity-50"
+            >
+              Nemam sliku
+            </button>
+          </div>
+        </div>
       )}
 
       {error && (
@@ -196,7 +303,7 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
             >
               <Link
                 href={profileHref(p.id)}
-                className="flex h-14 items-center justify-between px-4"
+                className="flex min-h-14 items-center justify-between gap-2 px-4 py-2"
               >
                 <span className="flex items-center gap-3 font-bold">
                   <Avatar
@@ -205,10 +312,36 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
                     size={32}
                     className="border-accent/40"
                   />
-                  {p.username}
+                  <span className="flex flex-col">
+                    {p.username}
+                    {!p.photoUrl && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-danger">
+                        Slikaj nam gdje si smrade.
+                      </span>
+                    )}
+                  </span>
                 </span>
-                <span className="text-xs font-bold uppercase tracking-widest text-accent">
-                  Prisutan · {timeFmt.format(new Date(p.arrivedAt))}
+                <span className="flex shrink-0 items-center gap-2">
+                  {p.photoUrl && (
+                    <button
+                      type="button"
+                      onClick={(e) => openPhoto(e, p)}
+                      className="pressable shrink-0"
+                      aria-label={`Dokazna slika: ${p.username}`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={p.photoUrl}
+                        alt=""
+                        width={40}
+                        height={40}
+                        className="h-10 w-10 rounded-lg border border-accent/30 object-cover"
+                      />
+                    </button>
+                  )}
+                  <span className="text-xs font-bold uppercase tracking-widest text-accent">
+                    {timeFmt.format(new Date(p.arrivedAt))}
+                  </span>
                 </span>
               </Link>
             </li>
@@ -260,6 +393,12 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
           ))}
         </ul>
       </section>
+
+      <PhotoLightbox
+        url={lightbox?.url}
+        caption={lightbox?.caption}
+        onClose={() => setLightbox(null)}
+      />
     </div>
   );
 }

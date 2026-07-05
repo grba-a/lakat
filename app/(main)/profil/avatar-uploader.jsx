@@ -3,49 +3,11 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { squareCropToBlob } from "@/lib/image";
 import Avatar from "../avatar";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const OUTPUT_SIZE = 256;
-
-// Smanji na 256x256 (cover-crop centra) da storage ne raste bez veze
-function resizeToBlob(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const s = Math.min(img.width, img.height);
-      const canvas = document.createElement("canvas");
-      canvas.width = OUTPUT_SIZE;
-      canvas.height = OUTPUT_SIZE;
-      canvas
-        .getContext("2d")
-        .drawImage(
-          img,
-          (img.width - s) / 2,
-          (img.height - s) / 2,
-          s,
-          s,
-          0,
-          0,
-          OUTPUT_SIZE,
-          OUTPUT_SIZE
-        );
-      URL.revokeObjectURL(url);
-      canvas.toBlob(
-        (blob) =>
-          blob ? resolve(blob) : reject(new Error("Canvas nije izbacio sliku.")),
-        "image/jpeg",
-        0.85
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Slika se ne da učitati."));
-    };
-    img.src = url;
-  });
-}
 
 export default function AvatarUploader({ userId, username, avatarUrl }) {
   const inputRef = useRef(null);
@@ -65,7 +27,7 @@ export default function AvatarUploader({ userId, username, avatarUrl }) {
 
     startTransition(async () => {
       try {
-        const blob = await resizeToBlob(file);
+        const blob = await squareCropToBlob(file, OUTPUT_SIZE);
         const supabase = createClient();
         const path = `${userId}/avatar.jpg`;
 
