@@ -12,11 +12,15 @@ export default function LoginPage() {
       <h1 className="font-display text-7xl uppercase leading-none tracking-tight">
         Lakat<span className="text-accent">.</span>
       </h1>
-      <p className="mt-3 border-l-4 border-accent pl-3 text-sm uppercase tracking-widest text-muted">
+      <p className="mt-3 text-sm uppercase tracking-widest text-muted">
+        <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
         Šank te čeka. Ekipa broji.
       </p>
 
-      <form action={formAction} className="mt-12 flex flex-col gap-5">
+      <form
+        action={formAction}
+        className="mt-12 flex flex-col gap-5 animate-[rise_300ms_var(--ease-fluid)_both]"
+      >
         <label className="flex flex-col gap-2">
           <span className="text-xs font-bold uppercase tracking-widest text-muted">
             Email
@@ -26,7 +30,7 @@ export default function LoginPage() {
             name="email"
             required
             autoComplete="email"
-            className="h-14 border-2 border-line bg-surface px-4 text-base outline-none focus:border-accent"
+            className="h-14 rounded-field border border-white/10 bg-white/[0.05] px-4 text-base outline-none transition-[border-color,box-shadow] duration-200 focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(74,222,128,0.15)]"
           />
         </label>
 
@@ -39,12 +43,12 @@ export default function LoginPage() {
             name="password"
             required
             autoComplete="current-password"
-            className="h-14 border-2 border-line bg-surface px-4 text-base outline-none focus:border-accent"
+            className="h-14 rounded-field border border-white/10 bg-white/[0.05] px-4 text-base outline-none transition-[border-color,box-shadow] duration-200 focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(74,222,128,0.15)]"
           />
         </label>
 
         {state?.error && (
-          <p className="border-2 border-danger bg-danger/10 px-4 py-3 text-sm font-bold text-danger">
+          <p className="rounded-card border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-bold text-danger">
             {state.error}
           </p>
         )}
@@ -52,7 +56,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={isPending}
-          className="mt-2 h-16 bg-accent font-display text-2xl uppercase tracking-wide text-black active:translate-y-0.5 disabled:opacity-50"
+          className="pressable-soft mt-2 h-16 rounded-button bg-accent font-display text-2xl uppercase tracking-wide text-black shadow-glow disabled:opacity-50"
         >
           {isPending ? "Malo strpljenja..." : "Pusti me unutra"}
         </button>

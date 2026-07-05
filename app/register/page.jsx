@@ -12,11 +12,15 @@ export default function RegisterPage() {
       <h1 className="font-display text-5xl uppercase leading-none tracking-tight">
         Novi u ekipi<span className="text-accent">?</span>
       </h1>
-      <p className="mt-3 border-l-4 border-accent pl-3 text-sm uppercase tracking-widest text-muted">
+      <p className="mt-3 text-sm uppercase tracking-widest text-muted">
+        <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
         Bez šifre grupe nema upada.
       </p>
 
-      <form action={formAction} className="mt-10 flex flex-col gap-5">
+      <form
+        action={formAction}
+        className="mt-10 flex flex-col gap-5 animate-[rise_300ms_var(--ease-fluid)_both]"
+      >
         <label className="flex flex-col gap-2">
           <span className="text-xs font-bold uppercase tracking-widest text-muted">
             Email
@@ -26,7 +30,7 @@ export default function RegisterPage() {
             name="email"
             required
             autoComplete="email"
-            className="h-14 border-2 border-line bg-surface px-4 text-base outline-none focus:border-accent"
+            className="h-14 rounded-field border border-white/10 bg-white/[0.05] px-4 text-base outline-none transition-[border-color,box-shadow] duration-200 focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(74,222,128,0.15)]"
           />
         </label>
 
@@ -40,7 +44,7 @@ export default function RegisterPage() {
             required
             minLength={6}
             autoComplete="new-password"
-            className="h-14 border-2 border-line bg-surface px-4 text-base outline-none focus:border-accent"
+            className="h-14 rounded-field border border-white/10 bg-white/[0.05] px-4 text-base outline-none transition-[border-color,box-shadow] duration-200 focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(74,222,128,0.15)]"
           />
         </label>
 
@@ -56,7 +60,7 @@ export default function RegisterPage() {
             maxLength={24}
             autoComplete="username"
             placeholder="kako te ekipa zove"
-            className="h-14 border-2 border-line bg-surface px-4 text-base outline-none placeholder:text-muted/50 focus:border-accent"
+            className="h-14 rounded-field border border-white/10 bg-white/[0.05] px-4 text-base outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted/50 focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(74,222,128,0.15)]"
           />
         </label>
 
@@ -69,7 +73,7 @@ export default function RegisterPage() {
             name="groupPassword"
             required
             autoComplete="off"
-            className="h-14 border-2 border-line bg-surface px-4 text-base outline-none focus:border-accent"
+            className="h-14 rounded-field border border-white/10 bg-white/[0.05] px-4 text-base outline-none transition-[border-color,box-shadow] duration-200 focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(74,222,128,0.15)]"
           />
           <span className="text-xs text-muted">
             Ne znaš je? Pitaj ekipu za šankom.
@@ -77,7 +81,7 @@ export default function RegisterPage() {
         </label>
 
         {state?.error && (
-          <p className="border-2 border-danger bg-danger/10 px-4 py-3 text-sm font-bold text-danger">
+          <p className="rounded-card border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-bold text-danger">
             {state.error}
           </p>
         )}
@@ -85,7 +89,7 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={isPending}
-          className="mt-2 h-16 bg-accent font-display text-2xl uppercase tracking-wide text-black active:translate-y-0.5 disabled:opacity-50"
+          className="pressable-soft mt-2 h-16 rounded-button bg-accent font-display text-2xl uppercase tracking-wide text-black shadow-glow disabled:opacity-50"
         >
           {isPending ? "Malo strpljenja..." : "Upadam"}
         </button>

@@ -107,8 +107,8 @@ export default function PushToggle({ vapidPublicKey }) {
             disabled={isPending}
             className={
               status === "on"
-                ? "mt-4 h-14 w-full border-2 border-line bg-surface font-display text-xl uppercase tracking-wide text-muted active:translate-y-0.5 disabled:opacity-50"
-                : "mt-4 h-14 w-full bg-accent font-display text-xl uppercase tracking-wide text-black active:translate-y-0.5 disabled:opacity-50"
+                ? "surface-2 pressable-soft mt-4 h-14 w-full rounded-button font-display text-xl uppercase tracking-wide text-muted disabled:opacity-50"
+                : "pressable-soft mt-4 h-14 w-full rounded-button bg-accent font-display text-xl uppercase tracking-wide text-black shadow-glow disabled:opacity-50"
             }
           >
             {isPending
@@ -126,7 +126,7 @@ export default function PushToggle({ vapidPublicKey }) {
       )}
 
       {error && (
-        <p className="mt-3 border-2 border-danger bg-danger/10 px-4 py-3 text-sm font-bold text-danger">
+        <p className="mt-3 rounded-card border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-bold text-danger">
           {error}
         </p>
       )}

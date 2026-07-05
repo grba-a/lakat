@@ -101,15 +101,15 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
         disabled={iAmPresent || isPending}
         className={
           iAmPresent
-            ? "mt-6 flex h-40 w-full items-center justify-center border-4 border-accent font-display text-4xl uppercase tracking-wide text-accent"
-            : "mt-6 flex h-40 w-full items-center justify-center bg-accent font-display text-6xl uppercase tracking-wide text-black active:translate-y-1 disabled:opacity-50"
+            ? "glass mt-6 flex h-40 w-full items-center justify-center rounded-hero border-accent/40 font-display text-4xl uppercase tracking-wide text-accent shadow-glow"
+            : "pressable mt-6 flex h-40 w-full items-center justify-center rounded-hero bg-accent font-display text-6xl uppercase tracking-wide text-black shadow-glow disabled:opacity-50"
         }
       >
         {iAmPresent ? "Tu si, legendo" : isPending ? "Sekunda..." : "Tu sam"}
       </button>
 
       {error && (
-        <p className="mt-4 border-2 border-danger bg-danger/10 px-4 py-3 text-sm font-bold text-danger">
+        <p className="mt-4 rounded-card border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-bold text-danger">
           {error}
         </p>
       )}
@@ -125,22 +125,27 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
           </p>
         )}
 
-        <ul className="mt-4 flex flex-col gap-2">
-          {present.map((p) => (
+        <ul className="stagger mt-4 flex flex-col gap-2">
+          {present.map((p, i) => (
             <li
               key={p.id}
-              className="flex h-14 items-center justify-between border-l-4 border-accent bg-surface px-4"
+              className="surface-2 flex h-14 items-center justify-between rounded-row border-accent/25 bg-accent/[0.08] px-4"
+              style={{ "--stagger-i": Math.min(i, 8) }}
             >
-              <span className="font-bold">{p.username}</span>
+              <span className="flex items-center gap-3 font-bold">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                {p.username}
+              </span>
               <span className="text-xs font-bold uppercase tracking-widest text-accent">
                 Prisutan · {timeFmt.format(new Date(p.arrivedAt))}
               </span>
             </li>
           ))}
-          {absent.map((p) => (
+          {absent.map((p, i) => (
             <li
               key={p.id}
-              className="flex h-14 items-center justify-between border-l-4 border-line bg-surface px-4 opacity-40"
+              className="surface-2 flex h-14 items-center justify-between rounded-row px-4 opacity-40 transition-opacity duration-300"
+              style={{ "--stagger-i": Math.min(present.length + i, 8) }}
             >
               <span className="font-bold">{p.username}</span>
               <span className="text-xs font-bold uppercase tracking-widest text-muted">

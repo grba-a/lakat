@@ -57,14 +57,19 @@ export default async function ProfilPage() {
           {profile?.username ?? "Bezimeni"}
           <span className="text-accent">.</span>
         </h1>
-        <p className="mt-3 border-l-4 border-accent pl-3 text-sm text-muted">
+        <p className="mt-3 text-sm text-muted">
+          <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
           U ekipi od {dateFmt.format(new Date(profile?.created_at ?? Date.now()))}
         </p>
       </section>
 
-      <section className="mt-10 grid grid-cols-2 gap-2">
-        {stats.map((stat) => (
-          <div key={stat.label} className="bg-surface px-4 py-5">
+      <section className="stagger mt-10 grid grid-cols-2 gap-3">
+        {stats.map((stat, i) => (
+          <div
+            key={stat.label}
+            className="surface-2 rounded-card px-4 py-5 shadow-soft"
+            style={{ "--stagger-i": i }}
+          >
             <p className="font-display text-4xl leading-none text-accent">
               {stat.value}
             </p>

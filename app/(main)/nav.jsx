@@ -13,17 +13,21 @@ export default function Nav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 border-t-2 border-line bg-background pb-[env(safe-area-inset-bottom)]">
-      <div className="mx-auto flex w-full max-w-sm">
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 px-5 pb-[max(env(safe-area-inset-bottom),0.75rem)]"
+      style={{ viewTransitionName: "tab-bar" }}
+    >
+      <div className="glass-nav mx-auto flex w-full max-w-sm rounded-full p-1.5">
         {TABS.map((tab) => {
           const active = pathname === tab.href;
           return (
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex h-16 flex-1 items-center justify-center font-display text-xl uppercase tracking-wide ${
-                active ? "border-t-4 border-accent text-accent" : "text-muted"
+              className={`pressable flex h-12 flex-1 items-center justify-center rounded-full font-display text-lg uppercase tracking-wide transition-colors duration-200 ${
+                active ? "bg-accent/15 text-accent" : "text-muted"
               }`}
+              style={active ? { viewTransitionName: "tab-pill" } : undefined}
             >
               {tab.label}
             </Link>

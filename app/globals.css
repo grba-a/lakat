@@ -8,6 +8,12 @@
   --muted: #8b8b94;
   --accent: #4ade80;
   --danger: #f87171;
+
+  /* staklo */
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-bg-nav: rgba(19, 19, 22, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 @theme inline {
@@ -20,9 +26,152 @@
   --color-danger: var(--danger);
   --font-sans: var(--font-archivo);
   --font-display: var(--font-anton);
+
+  /* radijusi */
+  --radius-row: 1rem;
+  --radius-field: 1rem;
+  --radius-card: 1.25rem;
+  --radius-button: 1.25rem;
+  --radius-hero: 1.75rem;
+
+  /* sjene */
+  --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-glow: 0 0 32px rgba(74, 222, 128, 0.22);
+  --shadow-glow-danger: 0 0 40px rgba(248, 113, 113, 0.15);
+
+  /* easing */
+  --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: linear(
+    0, 0.008, 0.034 2.9%, 0.144 6.5%, 0.62 17.9%, 0.804 23.5%,
+    0.943 29.8%, 1.004 36.8%, 1.022 44.3%, 1.018 55.1%, 1.002 76.8%, 1
+  );
+}
+
+/* Staklena kartica — koristi štedljivo (backdrop-filter košta) */
+@utility glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-highlight);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+
+/* Staklo za tab bar — solidan fallback, blur samo gdje je podržan */
+@utility glass-nav {
+  background: var(--glass-bg-nav);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-highlight), var(--shadow-float);
+  @supports (backdrop-filter: blur(1px)) {
+    background: rgba(19, 19, 22, 0.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    backdrop-filter: blur(20px) saturate(1.6);
+  }
+}
+
+/* Jeftino "staklo" za redove popisa — bez backdrop-filtera */
+@utility surface-2 {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@utility pressable {
+  transition: transform 150ms var(--ease-fluid);
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+@utility pressable-soft {
+  transition: transform 150ms var(--ease-fluid);
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+/* Ulazna animacija s kaskadom: <ul class="stagger">, na djeci --stagger-i */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.stagger > * {
+  animation: rise 300ms var(--ease-fluid) both;
+  animation-delay: calc(var(--stagger-i, 0) * 40ms);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* Atmosfera — statični sjaj da blur ima što mutiti; ne smije na wrapper
+   jer bi filter na pretku razbio fixed nav na iOS Safariju */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 40% at 50% -5%, rgba(74, 222, 128, 0.07), transparent 70%),
+    radial-gradient(50% 35% at 90% 110%, rgba(255, 255, 255, 0.03), transparent 70%);
+}
+
+/* Prijelazi između tabova (Next experimental viewTransition) */
+::view-transition-old(.page-cross) {
+  animation: 150ms var(--ease-fluid) both vt-fade reverse;
+}
+::view-transition-new(.page-cross) {
+  animation:
+    200ms var(--ease-fluid) 100ms both vt-fade,
+    300ms var(--ease-fluid) both vt-rise;
+}
+@keyframes vt-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes vt-rise {
+  from {
+    transform: translateY(10px);
+  }
+}
+
+/* Header i tab bar stoje ukopani tijekom prijelaza */
+::view-transition-group(app-header),
+::view-transition-group(tab-bar) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(app-header),
+::view-transition-old(tab-bar) {
+  display: none;
+}
+::view-transition-new(app-header),
+::view-transition-new(tab-bar) {
+  animation: none;
+}
+
+/* Aktivni tab-pill morfa s taba na tab */
+::view-transition-group(tab-pill) {
+  animation-duration: 300ms;
+  animation-timing-function: var(--ease-fluid);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation: none !important;
+  }
 }

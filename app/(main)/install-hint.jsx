@@ -19,7 +19,7 @@ export default function InstallHint() {
   return (
     <Link
       href="/upute"
-      className="mt-8 block border-2 border-dashed border-line px-4 py-3 text-center text-xs text-muted"
+      className="pressable-soft mt-8 block rounded-card border border-dashed border-white/15 bg-white/[0.03] px-4 py-3 text-center text-xs text-muted"
     >
       <span className="font-bold text-foreground">
         Dodaj Lakat na početni zaslon

@@ -78,7 +78,7 @@ export default async function ShamePage() {
             Još nema podataka. Mjesec je mlad, sram tek stiže.
           </p>
         ) : (
-          <div className="mt-3 border-l-4 border-danger bg-danger/10 px-4 py-4">
+          <div className="mt-3 rounded-card border border-danger/30 bg-danger/10 px-5 py-5 shadow-glow-danger backdrop-blur-xl">
             <p className="font-display text-5xl uppercase leading-none tracking-tight text-danger">
               {losers.map((l) => l.username).join(" & ")}
             </p>
@@ -95,15 +95,16 @@ export default async function ShamePage() {
         <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
           Rang srama · {formatMonth(currentMonth)}
         </h2>
-        <ul className="mt-4 flex flex-col gap-2">
+        <ul className="stagger mt-4 flex flex-col gap-2">
           {ranking.map((entry, i) => {
             const isLoser = losers.some((l) => l.id === entry.id);
             return (
               <li
                 key={entry.id}
-                className={`flex h-14 items-center justify-between border-l-4 bg-surface px-4 ${
-                  isLoser ? "border-danger" : "border-line"
+                className={`surface-2 flex h-14 items-center justify-between rounded-row px-4 ${
+                  isLoser ? "border-danger/30 bg-danger/[0.08]" : ""
                 }`}
+                style={{ "--stagger-i": Math.min(i, 8) }}
               >
                 <span className="flex items-center gap-3 font-bold">
                   <span className="w-5 text-sm text-muted">{i + 1}.</span>
@@ -131,11 +132,12 @@ export default async function ShamePage() {
             Prazna. Nitko još nije službeno proglašen, ali samo vi čekajte.
           </p>
         ) : (
-          <ul className="mt-4 flex flex-col gap-2">
-            {archive.map(({ monthKey, losers: monthLosers }) => (
+          <ul className="stagger mt-4 flex flex-col gap-2">
+            {archive.map(({ monthKey, losers: monthLosers }, i) => (
               <li
                 key={monthKey}
-                className="flex h-14 items-center justify-between border-l-4 border-danger/50 bg-surface px-4"
+                className="surface-2 flex h-14 items-center justify-between rounded-row px-4"
+                style={{ "--stagger-i": Math.min(i, 8) }}
               >
                 <span className="text-sm capitalize text-muted">
                   {formatMonth(monthKey)}

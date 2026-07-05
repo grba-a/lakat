@@ -8,7 +8,7 @@ function StepImage({ file, alt }) {
 
   if (!exists) {
     return (
-      <div className="flex aspect-[9/16] max-h-72 w-full items-center justify-center border-2 border-dashed border-line bg-surface px-4 text-center text-xs text-muted">
+      <div className="flex aspect-[9/16] max-h-72 w-full items-center justify-center rounded-card border border-dashed border-white/15 bg-white/[0.03] px-4 text-center text-xs text-muted">
         Slika stiže — ubaci {file} u /public/upute/
       </div>
     );
@@ -19,7 +19,7 @@ function StepImage({ file, alt }) {
     <img
       src={`/upute/${file}`}
       alt={alt}
-      className="max-h-72 w-full border-2 border-line object-contain"
+      className="max-h-72 w-full rounded-card border border-white/10 object-contain shadow-soft"
     />
   );
 }
@@ -43,7 +43,7 @@ export default function UputePage() {
         <h1 className="font-display text-5xl uppercase leading-none tracking-tight">
           Instaliraj<span className="text-accent">.</span>
         </h1>
-        <p className="mt-3 border-l-4 border-danger pl-3 text-sm text-muted">
+        <p className="mt-3 rounded-card border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-muted">
           Na iPhoneu <span className="font-bold text-danger">bez ovoga NEMA notifikacija</span>.
           Nula. Apple tako kaže. Dvije minute posla, ajde.
         </p>
