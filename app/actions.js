@@ -11,7 +11,7 @@ export async function logout() {
   redirect("/login");
 }
 
-export async function checkIn(photoUrl) {
+export async function checkIn(photoUrl, coords) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -24,6 +24,21 @@ export async function checkIn(photoUrl) {
   if (typeof photoUrl === "string") {
     const prefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/dokazi/${user.id}/`;
     if (photoUrl.startsWith(prefix)) photo_url = photoUrl;
+  }
+
+  // Lokacija je opcionalna; prihvaćaju se samo smislene koordinate
+  let lat = null;
+  let lng = null;
+  if (
+    typeof coords?.lat === "number" &&
+    typeof coords?.lng === "number" &&
+    Number.isFinite(coords.lat) &&
+    Number.isFinite(coords.lng) &&
+    Math.abs(coords.lat) <= 90 &&
+    Math.abs(coords.lng) <= 180
+  ) {
+    lat = coords.lat;
+    lng = coords.lng;
   }
 
   const dayStart = getCurrentDayStart();
@@ -47,7 +62,7 @@ export async function checkIn(photoUrl) {
 
   const { error } = await supabase
     .from("checkins")
-    .insert({ user_id: user.id, photo_url });
+    .insert({ user_id: user.id, photo_url, lat, lng });
   if (error) {
     return { error: `Checkin nije prošao: ${error.message}` };
   }

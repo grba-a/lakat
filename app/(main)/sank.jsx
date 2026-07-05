@@ -33,6 +33,7 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
   const [lightbox, setLightbox] = useState(null); // { url, caption }
   const [isPending, startTransition] = useTransition();
   const cameraRef = useRef(null);
+  const geoRef = useRef(null); // promise pokrenut na klik, awaita se pri checkinu
 
   // Realtime: INSERT (novi checkin) + UPDATE (poništenje) osvježavaju sve
   useEffect(() => {
@@ -120,11 +121,25 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
 
   const iAmPresent = present.some((p) => p.id === currentUserId);
 
+  // Lokacija se traži paralelno s kamerom; odbijena/spora lokacija ne
+  // blokira checkin (slika je dokaz, lokacija je bonus za mapu)
+  function requestLocation() {
+    if (!("geolocation" in navigator)) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 }
+      );
+    });
+  }
+
   function doCheckIn(photoUrl) {
     setAskPhoto(false);
     setError(null);
     startTransition(async () => {
-      const result = await checkIn(photoUrl ?? undefined);
+      const coords = await (geoRef.current ?? requestLocation());
+      const result = await checkIn(photoUrl ?? undefined, coords ?? undefined);
       if (result?.error) {
         setError(result.error);
         return;
@@ -147,6 +162,7 @@ export default function Sank({ profiles, initialCheckins, currentUserId }) {
   // TU SAM prvo otvara kameru — slika je dokaz i objava dana
   function handleCheckInClick() {
     setError(null);
+    geoRef.current = requestLocation();
     cameraRef.current?.click();
   }
 
