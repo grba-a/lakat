@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/prazan-sank",
+      "schedule": "0 19 * * *"
+    }
+  ]
+}
