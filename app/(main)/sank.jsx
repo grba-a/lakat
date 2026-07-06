@@ -20,6 +20,7 @@ const PHOTO_MAX_SIDE = 1024;
 const NAJAVA_TRAJANJE_MS = 45 * 60 * 1000;
 
 export default function Sank({
+  groupId,
   profiles,
   initialCheckins,
   currentUserId,
@@ -52,14 +53,17 @@ export default function Sank({
   const cameraRef = useRef(null);
   const geoRef = useRef(null); // promise pokrenut na klik, awaita se pri checkinu
 
-  // Realtime: INSERT (novi checkin) + UPDATE (poništenje) osvježavaju sve
+  // Realtime: INSERT (novi checkin) + UPDATE (poništenje) osvježavaju sve.
+  // Sve filtrirano po aktivnoj grupi (RLS to čuva i na serveru); na
+  // promjenu grupe komponenta se remounta (key) i resubscribea.
   useEffect(() => {
     const supabase = createClient();
+    const groupFilter = `group_id=eq.${groupId}`;
     const channel = supabase
-      .channel("checkins-live")
+      .channel(`checkins-live-${groupId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "checkins" },
+        { event: "INSERT", schema: "public", table: "checkins", filter: groupFilter },
         (payload) => {
           if (payload.new.checked_in_at < getCurrentDayStart().toISOString()) return;
           setRows((prev) => ({ ...prev, [payload.new.id]: payload.new }));
@@ -67,7 +71,7 @@ export default function Sank({
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "checkins" },
+        { event: "UPDATE", schema: "public", table: "checkins", filter: groupFilter },
         (payload) => {
           setRows((prev) =>
             prev[payload.new.id] ? { ...prev, [payload.new.id]: payload.new } : prev
@@ -76,14 +80,14 @@ export default function Sank({
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "najave" },
+        { event: "INSERT", schema: "public", table: "najave", filter: groupFilter },
         (payload) => {
           setNajave((prev) => ({ ...prev, [payload.new.id]: payload.new }));
         }
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "reactions" },
+        { event: "*", schema: "public", table: "reactions", filter: groupFilter },
         (payload) => {
           const row = payload.eventType === "DELETE" ? payload.old : payload.new;
           if (!row?.checkin_id) return;
@@ -105,7 +109,7 @@ export default function Sank({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [groupId]);
 
   // Nakon 06:00 svi se resetiraju u sivo, najave istječu — bez refresha
   useEffect(() => {

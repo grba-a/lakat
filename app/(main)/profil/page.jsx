@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllCheckins } from "@/lib/checkins";
+import { getActiveGroup } from "@/lib/groups";
 import { getDayKey } from "@/lib/day";
 import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
 import Heatmap from "../heatmap";
@@ -29,25 +30,42 @@ export default async function ProfilPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, checkins, { data: photos }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("username, created_at, avatar_url")
-      .eq("id", user.id)
-      .maybeSingle(),
-    fetchAllCheckins(supabase, user.id),
-    supabase
-      .from("checkins")
-      .select("id, checked_in_at, photo_url")
-      .eq("user_id", user.id)
-      .not("photo_url", "is", null)
-      .order("checked_in_at", { ascending: false })
-      .limit(60),
-  ]);
+  // Sve na profilu (statistika, heatmap, galerija) živi u aktivnoj grupi
+  const { active } = await getActiveGroup(supabase, user.id);
+
+  const [{ data: profile }, checkins, { data: photos }, { data: membership }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("username, created_at, avatar_url")
+        .eq("id", user.id)
+        .maybeSingle(),
+      fetchAllCheckins(supabase, user.id, active?.id),
+      supabase
+        .from("checkins")
+        .select("id, checked_in_at, photo_url")
+        .eq("user_id", user.id)
+        .eq("group_id", active?.id ?? "00000000-0000-0000-0000-000000000000")
+        .not("photo_url", "is", null)
+        .order("checked_in_at", { ascending: false })
+        .limit(60),
+      active
+        ? supabase
+            .from("group_members")
+            .select("joined_at")
+            .eq("group_id", active.id)
+            .eq("user_id", user.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
 
   const daySet = userDaySets(checkins).get(user.id) ?? new Set();
   const todayKey = getDayKey(new Date());
-  const regKey = getDayKey(profile?.created_at ?? new Date());
+  // Postotak se računa od ulaska u aktivnu grupu (staroj ekipi je to
+  // isto što i registracija)
+  const regKey = getDayKey(
+    membership?.joined_at ?? profile?.created_at ?? new Date()
+  );
   const possible = daysBetween(regKey, todayKey);
   const total = daySet.size;
   const pct = possible > 0 ? Math.round((total / possible) * 100) : 0;
@@ -101,7 +119,10 @@ export default async function ProfilPage() {
           )}
           <p className="mt-3 text-sm text-muted">
             <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
-            U ekipi od {dateFmt.format(new Date(profile?.created_at ?? Date.now()))}
+            U ekipi od{" "}
+            {dateFmt.format(
+              new Date(membership?.joined_at ?? profile?.created_at ?? Date.now())
+            )}
           </p>
         </div>
       </section>

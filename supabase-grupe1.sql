@@ -120,8 +120,12 @@ begin
   )
   returning id into g;
 
-  insert into public.group_members (group_id, user_id, role)
-  select g, id, case when username = admin_username then 'admin' else 'member' end
+  -- joined_at = datum registracije: statistika "od registracije" mora
+  -- ostati ista kao prije migracije
+  insert into public.group_members (group_id, user_id, role, joined_at)
+  select g, id,
+         case when username = admin_username then 'admin' else 'member' end,
+         created_at
   from public.profiles;
 
   update public.checkins set group_id = g where group_id is null;

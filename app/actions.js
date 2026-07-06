@@ -1,15 +1,42 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDayStart } from "@/lib/day";
-import { getActiveGroup } from "@/lib/groups";
-import { notifyOthers } from "@/lib/push";
+import { getActiveGroup, getMyGroups } from "@/lib/groups";
+import { notifyGroup } from "@/lib/push";
 
 export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+// Prebacivanje aktivne grupe (dropdown na Šanku) — samo u grupu u kojoj
+// si stvarno član
+export async function switchGroup(groupId) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const groups = await getMyGroups(supabase, user.id);
+  if (!groups.some((g) => g.id === groupId)) {
+    return { error: "Nisi u toj grupi. Lijepo probaj." };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ active_group_id: groupId })
+    .eq("id", user.id);
+  if (error) {
+    return { error: `Prebacivanje nije prošlo: ${error.message}` };
+  }
+
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 export async function checkIn(photoUrl, coords) {
@@ -74,14 +101,19 @@ export async function checkIn(photoUrl, coords) {
     return { error: `Checkin nije prošao: ${error.message}` };
   }
 
-  // Push ostalima — ne smije srušiti checkin ako slanje pukne
+  // Push ostalima iz grupe — ne smije srušiti checkin ako slanje pukne
   try {
     const { data: profile } = await supabase
       .from("profiles")
       .select("username")
       .eq("id", user.id)
       .maybeSingle();
-    await notifyOthers(user.id, profile?.username ?? "Netko");
+    await notifyGroup({
+      groupId: active.id,
+      groupName: active.name,
+      senderId: user.id,
+      body: `${profile?.username ?? "Netko"} je za šankom. Miči guzicu.`,
+    });
   } catch {
     // ignoriraj: checkin je prošao, obavijesti su best-effort
   }
@@ -190,11 +222,12 @@ export async function najaviDolazak() {
       .select("username")
       .eq("id", user.id)
       .maybeSingle();
-    await notifyOthers(
-      user.id,
-      profile?.username ?? "Netko",
-      `${profile?.username ?? "Netko"} kreće prema šanku. (Laže, kasnit će pola sata, klasika.)`
-    );
+    await notifyGroup({
+      groupId: grupa.id,
+      groupName: grupa.name,
+      senderId: user.id,
+      body: `${profile?.username ?? "Netko"} kreće prema šanku. (Laže, kasnit će pola sata, klasika.)`,
+    });
   } catch {
     // najava je prošla, push je best-effort
   }
