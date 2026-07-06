@@ -6,8 +6,9 @@
 --
 -- Zalijepi cijeli fajl u Supabase Dashboard > SQL Editor > Run.
 
--- 0. pgcrypto za hashiranje šifre grupe (crypt + gen_salt)
-create extension if not exists pgcrypto;
+-- 0. pgcrypto za hashiranje šifre grupe (crypt + gen_salt) — na Supabaseu
+-- extenzije žive u "extensions" schemi pa se funkcije zovu kvalificirano
+create extension if not exists pgcrypto with schema extensions;
 
 -- 1. GRUPE
 create table public.groups (
@@ -76,14 +77,14 @@ language sql stable security definer set search_path = public
 as $$
   select id from public.groups
   where lower(name) = lower(g_name)
-    and password_hash = crypt(g_password, password_hash);
+    and password_hash = extensions.crypt(g_password, password_hash);
 $$;
 
 create or replace function public.hash_group_password(pw text)
 returns text
 language sql stable security definer set search_path = public
 as $$
-  select crypt(pw, gen_salt('bf'));
+  select extensions.crypt(pw, extensions.gen_salt('bf'));
 $$;
 
 revoke execute on function public.verify_group_password(text, text) from public, anon, authenticated;
@@ -115,7 +116,7 @@ begin
   insert into public.groups (name, password_hash, created_by)
   values (
     'Club23',
-    crypt('srebreno23', gen_salt('bf')),
+    extensions.crypt('srebreno23', extensions.gen_salt('bf')),
     (select id from public.profiles where username = admin_username)
   )
   returning id into g;
