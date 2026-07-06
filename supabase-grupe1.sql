@@ -105,7 +105,7 @@ create policy "group_members_select_member" on public.group_members
 -- admin je može kasnije promijeniti u aplikaciji)
 do $$
 declare
-  admin_username text := 'OVDJE-UPISI-SVOJ-USERNAME';  -- <<< PROMIJENI OVO
+  admin_username text := 'grbaa';  -- admin grupe Club23
   g uuid;
 begin
   if not exists (select 1 from public.profiles where username = admin_username) then
