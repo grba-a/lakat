@@ -6,6 +6,7 @@ import { getDayKey } from "@/lib/day";
 import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
 import Avatar from "../../avatar";
 import Heatmap from "../../heatmap";
+import Galerija from "../../galerija";
 
 const dateFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -30,13 +31,20 @@ export default async function KorisnikPage({ params }) {
   if (!user) redirect("/login");
   if (user.id === id) redirect("/profil");
 
-  const [{ data: profile }, checkins] = await Promise.all([
+  const [{ data: profile }, checkins, { data: photos }] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, created_at, avatar_url")
       .eq("id", id)
       .maybeSingle(),
     fetchAllCheckins(supabase, id),
+    supabase
+      .from("checkins")
+      .select("id, checked_in_at, photo_url")
+      .eq("user_id", id)
+      .not("photo_url", "is", null)
+      .order("checked_in_at", { ascending: false })
+      .limit(60),
   ]);
 
   if (!profile) notFound();
@@ -105,6 +113,8 @@ export default async function KorisnikPage({ params }) {
       <p className="mt-6 text-sm text-muted">{comment(pct)}</p>
 
       <Heatmap daySet={daySet} todayKey={todayKey} />
+
+      <Galerija items={photos ?? []} />
     </main>
   );
 }

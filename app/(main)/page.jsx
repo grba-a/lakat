@@ -35,7 +35,7 @@ export default async function Home() {
   if (!user) redirect("/login");
 
   const dayStart = getCurrentDayStart();
-  const [{ data: profiles }, { data: checkins }, { data: memories }, allCheckins, ...flashbackResults] =
+  const [{ data: profiles }, { data: checkins }, allCheckins, ...flashbackResults] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -46,12 +46,6 @@ export default async function Home() {
         .select("id, user_id, checked_in_at, cancelled_at, photo_url")
         .gte("checked_in_at", dayStart.toISOString())
         .order("checked_in_at", { ascending: true }),
-      supabase
-        .from("checkins")
-        .select("id, user_id, checked_in_at, photo_url")
-        .not("photo_url", "is", null)
-        .order("checked_in_at", { ascending: false })
-        .limit(30),
       fetchAllCheckins(supabase),
       ...FLASHBACKS.map(({ months }) => {
         const start = shiftMonths(dayStart, months);
@@ -68,13 +62,11 @@ export default async function Home() {
   const allProfiles = profiles ?? [];
   const usernames = new Map(allProfiles.map((p) => [p.id, p.username]));
 
-  // Reakcije za sve slike na ekranu (današnji popis + memorije + flashback)
+  // Reakcije za sve slike na ekranu (današnji popis + flashback)
   // i žive najave dolaska — jedan upit svaka
   const flashbackRows = FLASHBACKS.flatMap((_, i) => flashbackResults[i]?.data ?? []);
   const reactionIds = [
-    ...new Set(
-      [...(checkins ?? []), ...(memories ?? []), ...flashbackRows].map((c) => c.id)
-    ),
+    ...new Set([...(checkins ?? []), ...flashbackRows].map((c) => c.id)),
   ];
   const najavaCutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString();
   const [{ data: reactionRows }, { data: najave }] = await Promise.all([
@@ -115,10 +107,15 @@ export default async function Home() {
     titles[p.id] = titleFor(current, losers.some((l) => l.id === p.id));
   }
 
-  const memoryItems = (memories ?? []).map((m) => ({
-    ...m,
-    username: usernames.get(m.user_id) ?? "Netko",
-  }));
+  // Slike dana: dokazne slike iz današnjih check-inova (nakon 06:00 kreće
+  // prazan grid), najnovije prve
+  const memoryItems = (checkins ?? [])
+    .filter((c) => c.photo_url)
+    .sort((a, b) => new Date(b.checked_in_at) - new Date(a.checked_in_at))
+    .map((m) => ({
+      ...m,
+      username: usernames.get(m.user_id) ?? "Netko",
+    }));
 
   const flashbackItems = FLASHBACKS.flatMap(({ label }, i) =>
     (flashbackResults[i]?.data ?? []).map((m) => ({

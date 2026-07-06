@@ -5,13 +5,14 @@ import { react } from "@/app/actions";
 import PhotoLightbox from "./photo-lightbox";
 import ReactionBar, { toggleReaction } from "./reaction-bar";
 
-const dateFmt = new Intl.DateTimeFormat("hr-HR", {
+const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
-  day: "numeric",
-  month: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
 });
 
-// Grid dokaznih slika (beer with me stil) — tap za fullscreen + reakcije
+// Grid današnjih dokaznih slika (beer with me stil) — tap za fullscreen +
+// reakcije; "resetira" se sam u 06:00 jer server šalje samo današnji dan
 export default function Memorije({ items, flashbacks = [], myId, initialReactions = {} }) {
   const [lightbox, setLightbox] = useState(null);
   const [reactions, setReactions] = useState(initialReactions);
@@ -79,21 +80,25 @@ export default function Memorije({ items, flashbacks = [], myId, initialReaction
         </div>
       )}
 
-      <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
-        Memorije
-      </h2>
-      <div className="stagger mt-4 grid grid-cols-3 gap-2">
-        {items.map((item, i) => (
-          <div key={item.id} style={{ "--stagger-i": Math.min(i, 8) }}>
-            <Tile
-              item={item}
-              caption={`${item.username} · ${dateFmt.format(new Date(item.checked_in_at))}`}
-              borderClass="border-white/10"
-              label={`Memorija: ${item.username}`}
-            />
+      {items.length > 0 && (
+        <>
+          <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
+            Slike dana
+          </h2>
+          <div className="stagger mt-4 grid grid-cols-3 gap-2">
+            {items.map((item, i) => (
+              <div key={item.id} style={{ "--stagger-i": Math.min(i, 8) }}>
+                <Tile
+                  item={item}
+                  caption={`${item.username} · ${timeFmt.format(new Date(item.checked_in_at))}`}
+                  borderClass="border-white/10"
+                  label={`Slika dana: ${item.username}`}
+                />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
       <PhotoLightbox
         url={lightbox?.url}

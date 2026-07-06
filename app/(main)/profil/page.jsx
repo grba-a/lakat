@@ -1,13 +1,12 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllCheckins } from "@/lib/checkins";
 import { getDayKey } from "@/lib/day";
 import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
 import Heatmap from "../heatmap";
-import PushToggle from "./push-toggle";
+import Galerija from "../galerija";
 import AvatarUploader from "./avatar-uploader";
-import UsernameForm from "./username-form";
-import PasswordForm from "./password-form";
 
 const dateFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -30,13 +29,20 @@ export default async function ProfilPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, checkins] = await Promise.all([
+  const [{ data: profile }, checkins, { data: photos }] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, created_at, avatar_url")
       .eq("id", user.id)
       .maybeSingle(),
     fetchAllCheckins(supabase, user.id),
+    supabase
+      .from("checkins")
+      .select("id, checked_in_at, photo_url")
+      .eq("user_id", user.id)
+      .not("photo_url", "is", null)
+      .order("checked_in_at", { ascending: false })
+      .limit(60),
   ]);
 
   const daySet = userDaySets(checkins).get(user.id) ?? new Set();
@@ -57,7 +63,27 @@ export default async function ProfilPage() {
 
   return (
     <main className="flex flex-1 flex-col">
-      <section className="mt-8 flex items-center gap-5">
+      <section className="relative mt-8 flex items-center gap-5">
+        <Link
+          href="/profil/postavke"
+          aria-label="Postavke"
+          className="pressable absolute -top-2 right-0 rounded-full p-2 text-accent/70 active:bg-white/5"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+          </svg>
+        </Link>
         <AvatarUploader
           userId={user.id}
           username={profile?.username}
@@ -101,21 +127,7 @@ export default async function ProfilPage() {
 
       <Heatmap daySet={daySet} todayKey={todayKey} />
 
-      <PushToggle vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
-
-      <section className="mt-10">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
-          Postavke
-        </h2>
-        <div className="stagger mt-4 flex flex-col gap-3">
-          <div style={{ "--stagger-i": 0 }}>
-            <UsernameForm username={profile?.username ?? ""} />
-          </div>
-          <div style={{ "--stagger-i": 1 }}>
-            <PasswordForm />
-          </div>
-        </div>
-      </section>
+      <Galerija items={photos ?? []} own />
     </main>
   );
 }

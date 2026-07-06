@@ -28,7 +28,7 @@ export default async function MapaPage() {
         </h1>
         <p className="mt-3 text-sm text-muted">
           <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
-          Tko se danas checkirao i odakle. Resetira se u 06:00.
+          Tko se danas checkirao i odakle.
         </p>
       </section>
 
