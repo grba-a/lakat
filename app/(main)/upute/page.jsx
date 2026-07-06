@@ -56,21 +56,21 @@ export default function UputePage() {
         <ol className="mt-4 flex flex-col gap-6">
           <Step
             n={1}
-            text="Otvori Lakat u Safariju i stisni Share gumb (kvadratić sa strelicom prema gore, dolje na sredini)."
-            file="ios-1.png"
-            alt="Safari sa Share gumbom"
+            text='Otvori Lakat u Safariju, otvori meni i stisni "Share".'
+            file="ios-1.jpg"
+            alt="Safari meni s opcijom Share"
           />
           <Step
             n={2}
-            text='U meniju nađi i stisni "Dodaj na početni zaslon" (Add to Home Screen).'
-            file="ios-2.png"
+            text='U meniju nađi i stisni "Add to Home Screen" (Dodaj na početni zaslon).'
+            file="ios-2.jpg"
             alt="Share meni s opcijom Add to Home Screen"
           />
           <Step
             n={3}
-            text="Potvrdi. Ikona Lakta ti je sad na home screenu — od sad otvaraj SAMO preko nje."
-            file="ios-3.png"
-            alt="Home screen s ikonom Lakta"
+            text='Stisni "Add" i gotov si. Ikona Lakta ti je sad na home screenu — od sad otvaraj SAMO preko nje.'
+            file="ios-3.jpg"
+            alt="Potvrda dodavanja na home screen"
           />
         </ol>
       </section>
