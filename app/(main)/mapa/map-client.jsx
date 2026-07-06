@@ -30,7 +30,7 @@ const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   minute: "2-digit",
 });
 
-export default function MapClient({ profiles, initialCheckins }) {
+export default function MapClient({ groupId, profiles, initialCheckins }) {
   const [rows, setRows] = useState(() => {
     const map = {};
     for (const c of initialCheckins) map[c.id] = c;
@@ -42,11 +42,12 @@ export default function MapClient({ profiles, initialCheckins }) {
 
   useEffect(() => {
     const supabase = createClient();
+    const groupFilter = `group_id=eq.${groupId}`;
     const channel = supabase
-      .channel("checkins-mapa")
+      .channel(`checkins-mapa-${groupId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "checkins" },
+        { event: "INSERT", schema: "public", table: "checkins", filter: groupFilter },
         (payload) => {
           if (payload.new.checked_in_at < getCurrentDayStart().toISOString()) return;
           setRows((prev) => ({ ...prev, [payload.new.id]: payload.new }));
@@ -54,7 +55,7 @@ export default function MapClient({ profiles, initialCheckins }) {
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "checkins" },
+        { event: "UPDATE", schema: "public", table: "checkins", filter: groupFilter },
         (payload) => {
           setRows((prev) =>
             prev[payload.new.id] ? { ...prev, [payload.new.id]: payload.new } : prev
@@ -65,7 +66,7 @@ export default function MapClient({ profiles, initialCheckins }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [groupId]);
 
   useEffect(() => {
     const timer = setInterval(

@@ -1,14 +1,42 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDayStart } from "@/lib/day";
-import { notifyOthers } from "@/lib/push";
+import { getActiveGroup, getMyGroups } from "@/lib/groups";
+import { notifyGroup } from "@/lib/push";
 
 export async function logout() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+// Prebacivanje aktivne grupe (dropdown na Šanku) — samo u grupu u kojoj
+// si stvarno član
+export async function switchGroup(groupId) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const groups = await getMyGroups(supabase, user.id);
+  if (!groups.some((g) => g.id === groupId)) {
+    return { error: "Nisi u toj grupi. Lijepo probaj." };
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ active_group_id: groupId })
+    .eq("id", user.id);
+  if (error) {
+    return { error: `Prebacivanje nije prošlo: ${error.message}` };
+  }
+
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 export async function checkIn(photoUrl, coords) {
@@ -41,14 +69,20 @@ export async function checkIn(photoUrl, coords) {
     lng = coords.lng;
   }
 
+  const { active } = await getActiveGroup(supabase, user.id);
+  if (!active) {
+    return { error: "Nisi ni u jednoj grupi. Kako si uopće ovdje?" };
+  }
+
   const dayStart = getCurrentDayStart();
 
-  // Dupli AKTIVNI checkin u istom danu blokiramo i na serveru; nakon
-  // poništenja se smiješ vratiti (novi red)
+  // Dupli AKTIVNI checkin u istom danu (u ovoj grupi) blokiramo i na
+  // serveru; nakon poništenja se smiješ vratiti (novi red)
   const { data: existing, error: checkError } = await supabase
     .from("checkins")
     .select("id")
     .eq("user_id", user.id)
+    .eq("group_id", active.id)
     .is("cancelled_at", null)
     .gte("checked_in_at", dayStart.toISOString())
     .limit(1);
@@ -62,19 +96,24 @@ export async function checkIn(photoUrl, coords) {
 
   const { error } = await supabase
     .from("checkins")
-    .insert({ user_id: user.id, photo_url, lat, lng });
+    .insert({ user_id: user.id, group_id: active.id, photo_url, lat, lng });
   if (error) {
     return { error: `Checkin nije prošao: ${error.message}` };
   }
 
-  // Push ostalima — ne smije srušiti checkin ako slanje pukne
+  // Push ostalima iz grupe — ne smije srušiti checkin ako slanje pukne
   try {
     const { data: profile } = await supabase
       .from("profiles")
       .select("username")
       .eq("id", user.id)
       .maybeSingle();
-    await notifyOthers(user.id, profile?.username ?? "Netko");
+    await notifyGroup({
+      groupId: active.id,
+      groupName: active.name,
+      senderId: user.id,
+      body: `${profile?.username ?? "Netko"} je za šankom. Miči guzicu.`,
+    });
   } catch {
     // ignoriraj: checkin je prošao, obavijesti su best-effort
   }
@@ -95,6 +134,17 @@ export async function react(checkinId, emoji) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // Grupa reakcije = grupa slike na koju se reagira (RLS pušta samo
+  // slike iz vlastitih grupa, pa je ovo ujedno i provjera članstva)
+  const { data: checkin } = await supabase
+    .from("checkins")
+    .select("group_id")
+    .eq("id", checkinId)
+    .maybeSingle();
+  if (!checkin) {
+    return { error: "Ta slika ne postoji ili nije iz tvoje grupe." };
+  }
+
   const { data: existing } = await supabase
     .from("reactions")
     .select("id, emoji")
@@ -111,7 +161,7 @@ export async function react(checkinId, emoji) {
   const { error } = await supabase
     .from("reactions")
     .upsert(
-      { checkin_id: checkinId, user_id: user.id, emoji },
+      { checkin_id: checkinId, user_id: user.id, group_id: checkin.group_id, emoji },
       { onConflict: "checkin_id,user_id" }
     );
   if (error) return { error: `Nije prošlo: ${error.message}` };
@@ -128,12 +178,18 @@ export async function najaviDolazak() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { active: grupa } = await getActiveGroup(supabase, user.id);
+  if (!grupa) {
+    return { error: "Nisi ni u jednoj grupi. Kamo točno stižeš?" };
+  }
+
   const dayStart = getCurrentDayStart();
 
   const { data: active } = await supabase
     .from("checkins")
     .select("id")
     .eq("user_id", user.id)
+    .eq("group_id", grupa.id)
     .is("cancelled_at", null)
     .gte("checked_in_at", dayStart.toISOString())
     .limit(1);
@@ -146,13 +202,16 @@ export async function najaviDolazak() {
     .from("najave")
     .select("id")
     .eq("user_id", user.id)
+    .eq("group_id", grupa.id)
     .gte("created_at", since)
     .limit(1);
   if (recent?.length) {
     return { already: true };
   }
 
-  const { error } = await supabase.from("najave").insert({ user_id: user.id });
+  const { error } = await supabase
+    .from("najave")
+    .insert({ user_id: user.id, group_id: grupa.id });
   if (error) {
     return { error: `Najava nije prošla: ${error.message}` };
   }
@@ -163,11 +222,12 @@ export async function najaviDolazak() {
       .select("username")
       .eq("id", user.id)
       .maybeSingle();
-    await notifyOthers(
-      user.id,
-      profile?.username ?? "Netko",
-      `${profile?.username ?? "Netko"} kreće prema šanku. (Laže, kasnit će pola sata, klasika.)`
-    );
+    await notifyGroup({
+      groupId: grupa.id,
+      groupName: grupa.name,
+      senderId: user.id,
+      body: `${profile?.username ?? "Netko"} kreće prema šanku. (Laže, kasnit će pola sata, klasika.)`,
+    });
   } catch {
     // najava je prošla, push je best-effort
   }
@@ -182,12 +242,18 @@ export async function cancelCheckIn() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { active } = await getActiveGroup(supabase, user.id);
+  if (!active) {
+    return { error: "Nisi ni u jednoj grupi. Od čega bježiš?" };
+  }
+
   const dayStart = getCurrentDayStart();
 
   const { data: rows, error: findError } = await supabase
     .from("checkins")
     .select("id")
     .eq("user_id", user.id)
+    .eq("group_id", active.id)
     .is("cancelled_at", null)
     .gte("checked_in_at", dayStart.toISOString())
     .order("checked_in_at", { ascending: false })

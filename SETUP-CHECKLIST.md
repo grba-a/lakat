@@ -13,7 +13,7 @@
 3. **Env varijable**: kad Claude Code u fazi 1 napravi .env.local.example, kopiraj ga u .env.local i upiši:
    - NEXT_PUBLIC_SUPABASE_URL = tvoj project URL
    - NEXT_PUBLIC_SUPABASE_ANON_KEY = anon key
-   - GROUP_PASSWORD = šifra koju daš ekipi (npr. srebreno23)
+   - (šifre grupa žive hashirane u bazi — nema ih u env varijablama)
 
 4. **Model i mod**: u Claude Codeu /model pa odaberi Fable 5. Prije svake faze Shift+Tab dvaput za Plan Mode, pregledaj plan, tek onda odobri.
 
@@ -30,7 +30,7 @@
 
 1. Novi repo na GitHubu, push
 2. Vercel > Import repo
-3. U Vercel Environment Variables upiši SVE iz .env.local (GROUP_PASSWORD posebno, bez njega registracija ne radi na produkciji)
+3. U Vercel Environment Variables upiši SVE iz .env.local
 4. Za fazu 5 dodaš i VAPID ključeve (Claude Code će ti generirati komandu za njih)
 5. Domena: Vercel > Settings > Domains > dodaj laktarenje.com. Kod registrara postavi A record 76.76.21.21 za root i CNAME cname.vercel-dns.com za www. SSL Vercel sredi sam.
 6. Supabase > Authentication > URL Configuration: Site URL = https://laktarenje.com, dodaj je i u Redirect URLs. Bez ovoga auth puca na produkciji.

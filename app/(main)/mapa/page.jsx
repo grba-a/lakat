@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDayStart } from "@/lib/day";
+import { getActiveGroup } from "@/lib/groups";
 import MapClient from "./map-client";
 
 export default async function MapaPage() {
@@ -10,12 +11,25 @@ export default async function MapaPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { active } = await getActiveGroup(supabase, user.id);
+  if (!active) {
+    return (
+      <main className="flex flex-1 flex-col">
+        <p className="mt-10 text-sm text-muted">Nisi ni u jednoj grupi.</p>
+      </main>
+    );
+  }
+
   const dayStart = getCurrentDayStart();
   const [{ data: profiles }, { data: checkins }] = await Promise.all([
-    supabase.from("profiles").select("id, username, avatar_url"),
+    supabase
+      .from("profiles")
+      .select("id, username, avatar_url, group_members!inner(group_id)")
+      .eq("group_members.group_id", active.id),
     supabase
       .from("checkins")
       .select("id, user_id, checked_in_at, cancelled_at, photo_url, lat, lng")
+      .eq("group_id", active.id)
       .gte("checked_in_at", dayStart.toISOString())
       .order("checked_in_at", { ascending: true }),
   ]);
@@ -33,6 +47,8 @@ export default async function MapaPage() {
       </section>
 
       <MapClient
+        key={active.id}
+        groupId={active.id}
         profiles={profiles ?? []}
         initialCheckins={checkins ?? []}
       />

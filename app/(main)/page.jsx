@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDayStart, getDayKey } from "@/lib/day";
 import { fetchAllCheckins } from "@/lib/checkins";
+import { getActiveGroup } from "@/lib/groups";
 import {
   userDaySets,
   computeStreaks,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/stats";
 import Sank from "./sank";
 import Memorije from "./memorije";
+import GroupSwitcher from "./group-switcher";
 import InstallHint from "./install-hint";
 
 // Flashback: isti datum unazad — dobiva smisao protokom vremena
@@ -34,32 +36,55 @@ export default async function Home() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  // Sve na ekranu živi u aktivnoj grupi — prebacivanjem grupe mijenja se
+  // popis, slike, statistika, sve
+  const { active, groups } = await getActiveGroup(supabase, user.id);
+  if (!active) {
+    return (
+      <main className="flex flex-1 flex-col">
+        <p className="mt-10 rounded-card border border-danger/30 bg-danger/10 px-4 py-4 text-sm font-bold text-danger">
+          Nisi ni u jednoj grupi. Javi se onome tko te izbacio.
+        </p>
+      </main>
+    );
+  }
+
   const dayStart = getCurrentDayStart();
   const [{ data: profiles }, { data: checkins }, allCheckins, ...flashbackResults] =
     await Promise.all([
       supabase
         .from("profiles")
-        .select("id, username, avatar_url, created_at")
+        .select(
+          "id, username, avatar_url, created_at, group_members!inner(group_id, joined_at)"
+        )
+        .eq("group_members.group_id", active.id)
         .order("username"),
       supabase
         .from("checkins")
         .select("id, user_id, checked_in_at, cancelled_at, photo_url")
+        .eq("group_id", active.id)
         .gte("checked_in_at", dayStart.toISOString())
         .order("checked_in_at", { ascending: true }),
-      fetchAllCheckins(supabase),
+      fetchAllCheckins(supabase, undefined, active.id),
       ...FLASHBACKS.map(({ months }) => {
         const start = shiftMonths(dayStart, months);
         const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
         return supabase
           .from("checkins")
           .select("id, user_id, checked_in_at, photo_url")
+          .eq("group_id", active.id)
           .not("photo_url", "is", null)
           .gte("checked_in_at", start.toISOString())
           .lt("checked_in_at", end.toISOString());
       }),
     ]);
 
-  const allProfiles = profiles ?? [];
+  // Statistika unutar grupe kreće od ulaska u grupu, ne od registracije
+  // računa (za staru ekipu su ta dva datuma ista — migracija ih izjednači)
+  const allProfiles = (profiles ?? []).map((p) => ({
+    ...p,
+    created_at: p.group_members?.[0]?.joined_at ?? p.created_at,
+  }));
   const usernames = new Map(allProfiles.map((p) => [p.id, p.username]));
 
   // Reakcije za sve slike na ekranu (današnji popis + flashback)
@@ -79,6 +104,7 @@ export default async function Home() {
     supabase
       .from("najave")
       .select("id, user_id, created_at")
+      .eq("group_id", active.id)
       .gte("created_at", najavaCutoff),
   ]);
 
@@ -127,7 +153,12 @@ export default async function Home() {
 
   return (
     <main className="flex flex-1 flex-col">
+      <div className="mt-4 flex justify-end">
+        <GroupSwitcher groups={groups} activeId={active.id} />
+      </div>
       <Sank
+        key={active.id}
+        groupId={active.id}
         profiles={allProfiles}
         initialCheckins={checkins ?? []}
         currentUserId={user.id}
@@ -136,6 +167,7 @@ export default async function Home() {
         initialReactions={reactionsByCheckin}
       />
       <Memorije
+        key={`memorije-${active.id}`}
         items={memoryItems}
         flashbacks={flashbackItems}
         myId={user.id}

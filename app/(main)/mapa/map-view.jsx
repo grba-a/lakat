@@ -4,13 +4,16 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-// Club23, Srebreno — default centar dok nema markera
+// Fallback centar (Club23, Srebreno) dok nema ni markera ni dopuštene
+// lokacije gledatelja
 const HOME = [42.6215, 18.1996];
 
 export default function MapView({ markers }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const layerRef = useRef(null);
+  const markersCountRef = useRef(markers.length);
+  markersCountRef.current = markers.length;
 
   useEffect(() => {
     if (mapRef.current) return;
@@ -24,6 +27,23 @@ export default function MapView({ markers }) {
     map.setView(HOME, 15);
     layerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
+
+    // Default centar = gdje je gledatelj SAD; markeri imaju prednost
+    // (fitBounds ispod), odbijena lokacija ostavlja fallback
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (mapRef.current && markersCountRef.current === 0) {
+            mapRef.current.setView(
+              [pos.coords.latitude, pos.coords.longitude],
+              15
+            );
+          }
+        },
+        () => {},
+        { timeout: 8000, maximumAge: 60_000 }
+      );
+    }
 
     return () => {
       map.remove();

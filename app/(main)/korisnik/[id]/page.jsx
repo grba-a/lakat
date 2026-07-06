@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllCheckins } from "@/lib/checkins";
+import { getActiveGroup } from "@/lib/groups";
 import { getDayKey } from "@/lib/day";
 import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
 import Avatar from "../../avatar";
@@ -31,27 +32,40 @@ export default async function KorisnikPage({ params }) {
   if (!user) redirect("/login");
   if (user.id === id) redirect("/profil");
 
-  const [{ data: profile }, checkins, { data: photos }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("username, created_at, avatar_url")
-      .eq("id", id)
-      .maybeSingle(),
-    fetchAllCheckins(supabase, id),
-    supabase
-      .from("checkins")
-      .select("id, checked_in_at, photo_url")
-      .eq("user_id", id)
-      .not("photo_url", "is", null)
-      .order("checked_in_at", { ascending: false })
-      .limit(60),
-  ]);
+  // Tuđi profil se gleda kroz aktivnu grupu; RLS ionako ne pušta profile
+  // ljudi s kojima ne dijeliš nijednu grupu (maybeSingle vrati null)
+  const { active } = await getActiveGroup(supabase, user.id);
+  if (!active) notFound();
 
-  if (!profile) notFound();
+  const [{ data: profile }, checkins, { data: photos }, { data: membership }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("username, created_at, avatar_url")
+        .eq("id", id)
+        .maybeSingle(),
+      fetchAllCheckins(supabase, id, active.id),
+      supabase
+        .from("checkins")
+        .select("id, checked_in_at, photo_url")
+        .eq("user_id", id)
+        .eq("group_id", active.id)
+        .not("photo_url", "is", null)
+        .order("checked_in_at", { ascending: false })
+        .limit(60),
+      supabase
+        .from("group_members")
+        .select("joined_at")
+        .eq("group_id", active.id)
+        .eq("user_id", id)
+        .maybeSingle(),
+    ]);
+
+  if (!profile || !membership) notFound();
 
   const daySet = userDaySets(checkins).get(id) ?? new Set();
   const todayKey = getDayKey(new Date());
-  const regKey = getDayKey(profile.created_at);
+  const regKey = getDayKey(membership.joined_at ?? profile.created_at);
   const possible = daysBetween(regKey, todayKey);
   const total = daySet.size;
   const pct = possible > 0 ? Math.round((total / possible) * 100) : 0;
@@ -88,7 +102,8 @@ export default async function KorisnikPage({ params }) {
           )}
           <p className="mt-3 text-sm text-muted">
             <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
-            U ekipi od {dateFmt.format(new Date(profile.created_at))}
+            U ekipi od{" "}
+            {dateFmt.format(new Date(membership.joined_at ?? profile.created_at))}
           </p>
         </div>
       </section>

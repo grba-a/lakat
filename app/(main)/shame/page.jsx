@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllCheckins } from "@/lib/checkins";
+import { getActiveGroup } from "@/lib/groups";
 import { getDayKey } from "@/lib/day";
 import {
   userDaySets,
@@ -34,12 +35,30 @@ export default async function ShamePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { active } = await getActiveGroup(supabase, user.id);
+  if (!active) {
+    return (
+      <main className="flex flex-1 flex-col">
+        <p className="mt-10 text-sm text-muted">Nisi ni u jednoj grupi.</p>
+      </main>
+    );
+  }
+
   const [{ data: profiles }, checkins] = await Promise.all([
-    supabase.from("profiles").select("id, username, created_at, avatar_url"),
-    fetchAllCheckins(supabase),
+    supabase
+      .from("profiles")
+      .select(
+        "id, username, created_at, avatar_url, group_members!inner(group_id, joined_at)"
+      )
+      .eq("group_members.group_id", active.id),
+    fetchAllCheckins(supabase, undefined, active.id),
   ]);
 
-  const allProfiles = profiles ?? [];
+  // Sram se računa od ulaska u grupu, ne od registracije računa
+  const allProfiles = (profiles ?? []).map((p) => ({
+    ...p,
+    created_at: p.group_members?.[0]?.joined_at ?? p.created_at,
+  }));
   const daySets = userDaySets(checkins);
   const todayKey = getDayKey(new Date());
   const currentMonth = monthOf(todayKey);
