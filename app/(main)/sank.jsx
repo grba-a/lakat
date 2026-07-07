@@ -52,6 +52,7 @@ export default function Sank({
   const [isPending, startTransition] = useTransition();
   const cameraRef = useRef(null);
   const geoRef = useRef(null); // promise pokrenut na klik, awaita se pri checkinu
+  const previewUrlRef = useRef(null); // object URL lokalnog previewa, čeka se pravi red pa se revoke-a
 
   // Realtime: INSERT (novi checkin) + UPDATE (poništenje) osvježavaju sve.
   // Sve filtrirano po aktivnoj grupi (RLS to čuva i na serveru); na
@@ -129,6 +130,37 @@ export default function Sank({
     return () => input.removeEventListener("cancel", onCancel);
   }, []);
 
+  // Čim pravi red (s pravim photo_url-om) stigne realtimeom, tmp red s
+  // lokalnim previewom više ne treba — makni ga i oslobodi object URL
+  useEffect(() => {
+    const tmpKey = `tmp-${currentUserId}`;
+    if (!rows[tmpKey]) return;
+    const hasReal = Object.values(rows).some(
+      (r) =>
+        r.user_id === currentUserId &&
+        r.id !== tmpKey &&
+        !r.cancelled_at &&
+        r.checked_in_at >= dayStartIso
+    );
+    if (!hasReal) return;
+    setRows((prev) => {
+      const next = { ...prev };
+      delete next[tmpKey];
+      return next;
+    });
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+  }, [rows, currentUserId, dayStartIso]);
+
+  // Sigurnosna mreža ako se komponenta unmounta prije nego pravi red stigne
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, []);
+
   // Po korisniku: najraniji aktivni checkin (dolazak + slika), najkasnije
   // poništenje i najsvježija živa najava dolaska
   const { present, arriving, fled, absent } = useMemo(() => {
@@ -193,33 +225,46 @@ export default function Sank({
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         () => resolve(null),
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 }
+        { enableHighAccuracy: true, timeout: 4000, maximumAge: 60_000 }
       );
     });
+  }
+
+  // Šalje checkin serveru u pozadini; ne blokira UI (optimistički red je već
+  // na ekranu prije ovog poziva). Na grešku miče tmp red i vraća false.
+  async function submitCheckIn(photoUrl, tmpKey) {
+    const coords = await (geoRef.current ?? requestLocation());
+    const result = await checkIn(photoUrl ?? undefined, coords ?? undefined);
+    if (result?.error) {
+      setError(result.error);
+      setRows((prev) => {
+        const next = { ...prev };
+        delete next[tmpKey];
+        return next;
+      });
+      return false;
+    }
+    return true;
   }
 
   function doCheckIn(photoUrl) {
     setAskPhoto(false);
     setError(null);
+    const tmpKey = `tmp-${currentUserId}`;
+    // Optimistički temp red ODMAH — pravi stiže realtimeom (derivacija je po
+    // korisniku pa duplikat ne smeta, efekt gore ga makne kad stigne pravi)
+    setRows((prev) => ({
+      ...prev,
+      [tmpKey]: {
+        id: tmpKey,
+        user_id: currentUserId,
+        checked_in_at: new Date().toISOString(),
+        cancelled_at: null,
+        photo_url: photoUrl ?? null,
+      },
+    }));
     startTransition(async () => {
-      const coords = await (geoRef.current ?? requestLocation());
-      const result = await checkIn(photoUrl ?? undefined, coords ?? undefined);
-      if (result?.error) {
-        setError(result.error);
-        return;
-      }
-      // Optimistički temp red; pravi stiže realtimeom (derivacija je po
-      // korisniku pa duplikat ne smeta)
-      setRows((prev) => ({
-        ...prev,
-        [`tmp-${currentUserId}`]: {
-          id: `tmp-${currentUserId}`,
-          user_id: currentUserId,
-          checked_in_at: new Date().toISOString(),
-          cancelled_at: null,
-          photo_url: photoUrl ?? null,
-        },
-      }));
+      await submitCheckIn(photoUrl, tmpKey);
     });
   }
 
@@ -237,9 +282,27 @@ export default function Sank({
       setAskPhoto(true);
       return;
     }
+    setError(null);
+    setAskPhoto(false);
+    const tmpKey = `tmp-${currentUserId}`;
     startTransition(async () => {
       try {
+        // Kompresija je brza (canvas) — čim imamo blob, pokaži se u listi
+        // odmah s lokalnim previewom; upload i checkin idu u pozadini.
         const blob = await downscaleToBlob(file, PHOTO_MAX_SIDE);
+        const previewUrl = URL.createObjectURL(blob);
+        previewUrlRef.current = previewUrl;
+        setRows((prev) => ({
+          ...prev,
+          [tmpKey]: {
+            id: tmpKey,
+            user_id: currentUserId,
+            checked_in_at: new Date().toISOString(),
+            cancelled_at: null,
+            photo_url: previewUrl,
+          },
+        }));
+
         const supabase = createClient();
         const path = `${currentUserId}/${Date.now()}.jpg`;
         const { error: uploadError } = await supabase.storage
@@ -250,8 +313,18 @@ export default function Sank({
           });
         if (uploadError) throw new Error(uploadError.message);
         const { data } = supabase.storage.from("dokazi").getPublicUrl(path);
-        doCheckIn(data.publicUrl);
+        const ok = await submitCheckIn(data.publicUrl, tmpKey);
+        if (!ok) setAskPhoto(true);
       } catch {
+        setRows((prev) => {
+          const next = { ...prev };
+          delete next[tmpKey];
+          return next;
+        });
+        if (previewUrlRef.current) {
+          URL.revokeObjectURL(previewUrlRef.current);
+          previewUrlRef.current = null;
+        }
         setError("Slika nije prošla. Probaj opet ili uđi bez dokaza ko pička.");
         setAskPhoto(true);
       }

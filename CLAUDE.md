@@ -3,17 +3,23 @@
 # LAKAT — Kontekst projekta
 
 ## Što je ovo
-Web aplikacija (PWA) za privatnu ekipu koja se nalazi u kafiću Club23 u Srebrenom.
+Web aplikacija (PWA) za privatne ekipe koje se checkiraju kad su vani (izvorno kafić Club23 u Srebrenom,
+danas grupa preimenovana u "beta" jer se aplikacija otvara novim korisnicima).
 Korisnici se registriraju, klikom na gumb "TU SAM" označe da su prisutni za šankom.
 Ostali ih vide na popisu u realtimeu. Tko ne dolazi, javno je posramljen kao "pička mjeseca".
 Ton aplikacije je vulgaran i zajebantski — to je feature, ne bug. Copy piši na hrvatskom, slobodno bezobrazno.
 
+Aplikacija je **multi-tenant**: korisnik može biti član do 3 grupe, svaka grupa ima svoje ime i lozinku
+(hashirano u bazi, provjera isključivo server-side), sve što se vidi (checkini, statistika, mapa) je
+scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
+
 ## Stack (NE MIJENJAJ)
-- Next.js 14+, App Router, JavaScript (.jsx), NE TypeScript
-- Tailwind CSS
-- Supabase: auth (email + lozinka), Postgres, Realtime
-- Hosting: Vercel
+- Next.js 16+, App Router, JavaScript (.jsx), NE TypeScript
+- Tailwind CSS v4 (tema u `app/globals.css`, nema `tailwind.config.js`)
+- Supabase: auth (email + lozinka), Postgres, Realtime, Storage
+- Hosting: Vercel (laktarenje.com)
 - PWA: manifest + service worker, instalacija na home screen
+- Middleware fajl se zove `proxy.js` (Next 16 preimenovanje middleware→proxy)
 
 ## Pravila igre (poslovna logika)
 1. **Check-in**: korisnik klikne "TU SAM" → upisuje se red u `checkins` s timestampom.
@@ -26,31 +32,38 @@ Ton aplikacije je vulgaran i zajebantski — to je feature, ne bug. Copy piši n
    - Korisniku registriranom sredinom mjeseca broji se samo od dana registracije (usporedba po postotku mogućih dana, ne apsolutnom broju).
    - Izjednačenje → svi izjednačeni su pička mjeseca.
    - Računa se on-the-fly kad netko otvori hall of shame. NEMA cron joba.
-6. **Registracija**: email, lozinka, username, šifra grupe. Šifra se provjerava ISKLJUČIVO server-side protiv env varijable GROUP_PASSWORD. Nikad ne slati šifru u klijentski bundle.
+6. **Registracija**: email, lozinka, username, ime + šifra grupe (join postojeće ili create nove). Šifra grupe je hashirana u `groups.password_hash` (pgcrypto) i provjerava se ISKLJUČIVO server-side preko `verify_group_password` RPC-a (service_role only). Nikad ne slati šifru u klijentski bundle.
 
 ## Baza (Supabase)
-Tablice su već kreirane SQL-om iz `supabase-setup.sql`. NE kreiraj migracije, NE mijenjaj schemu bez pitanja.
+Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `supabase-setup.sql` → `-avatars` → `-faza1..4` → `-grupe1.sql`. NE kreiraj migracijski framework, NE mijenjaj schemu bez pitanja — dodaj novi `supabase-*.sql` fajl po istoj konvenciji.
 
-- `profiles`: id (uuid, FK na auth.users), username (unique), created_at
-- `checkins`: id, user_id (FK profiles), checked_in_at (timestamptz)
-- `push_subscriptions`: id, user_id, subscription (jsonb), created_at — koristi se tek u fazi 5
+- `profiles`: id (uuid, FK na auth.users), username (unique), avatar_url, active_group_id, created_at
+- `checkins`: id, user_id, group_id, checked_in_at, cancelled_at, photo_url, lat, lng
+- `groups`: id, name (unique), password_hash, created_by
+- `group_members`: group_id, user_id, role (admin/member), joined_at
+- `reactions`: checkin_id, user_id, emoji (unique po user/checkin)
+- `najave`: "stižem" najave dolaska
+- `push_subscriptions`: user_id, subscription (jsonb), created_at
 
-RLS je uključen. Klijent čita profiles i checkins svih, piše samo svoje. Detalji u SQL fajlu.
+RLS je uključen i grupno-scopan (`is_member(group_id)`, `shares_group_with(id)` helper funkcije). Sva pisanja u `groups`/`group_members` idu isključivo kroz service-role admin klijent (`lib/supabase/admin.js`), nema client insert/update policyja na tim tablicama.
 
 ## Realtime
-Supabase Realtime subscription na `checkins` (INSERT). Kad netko klikne "TU SAM", popis se svima osvježi bez refresha.
+Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkins`/`najave`/`reactions` (INSERT/UPDATE). Kad netko klikne "TU SAM", popis se svima u istoj grupi osvježi bez refresha.
 
 ## Env varijable (.env.local)
 - NEXT_PUBLIC_SUPABASE_URL
 - NEXT_PUBLIC_SUPABASE_ANON_KEY
-- GROUP_PASSWORD (server-only, bez NEXT_PUBLIC prefiksa)
-- Faza 5: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, NEXT_PUBLIC_VAPID_PUBLIC_KEY
+- SUPABASE_SECRET_KEY (server-only, service role, bypass RLS — koristi se za grupne operacije)
+- CRON_SECRET (za `/api/cron/prazan-sank`)
+- VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, NEXT_PUBLIC_VAPID_PUBLIC_KEY (push)
 
 ## Ekrani
-1. `/login` i `/register` — auth
-2. `/` — glavni: veliki gumb "TU SAM", ispod realtime popis korisnika
-3. `/shame` — hall of shame: trenutno stanje mjeseca (tko vodi u sramoti) + arhiva prošlih mjeseci
-4. `/profil` — vlastita statistika: broj dolazaka, postotak, streak
+1. `/login` i `/register` — auth (join ili create grupu pri registraciji)
+2. `/` — glavni "Šank": veliki gumb "TU SAM", ispod realtime popis korisnika, "Slike dana"
+3. `/shame` — hall of shame: trenutno stanje mjeseca + arhiva
+4. `/mapa` — Leaflet mapa check-in lokacija
+5. `/profil` i `/profil/postavke` — vlastita statistika, galerija, upravljanje grupama
+6. `/korisnik/[id]` — tuđi profil
 
 ## Dizajn
 - Mobile first. 95% korištenja je s mobitela u kafiću, po noći.
