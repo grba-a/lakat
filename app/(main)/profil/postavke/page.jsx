@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getMyGroups } from "@/lib/groups";
 import { logout } from "@/app/actions";
 import PushToggle from "../push-toggle";
 import UsernameForm from "../username-form";
 import PasswordForm from "../password-form";
+import MojeGrupe from "./moje-grupe";
 
 export default async function PostavkePage() {
   const supabase = await createClient();
@@ -13,11 +15,35 @@ export default async function PostavkePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("username")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, groups] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle(),
+    getMyGroups(supabase, user.id),
+  ]);
+
+  // Članovi svih mojih grupa u jednom upitu (RLS pušta samo vlastite grupe)
+  const groupIds = groups.map((g) => g.id);
+  const { data: memberRows } = groupIds.length
+    ? await supabase
+        .from("group_members")
+        .select("group_id, user_id, role, profiles(username)")
+        .in("group_id", groupIds)
+        .order("joined_at", { ascending: true })
+    : { data: [] };
+
+  const grupe = groups.map((g) => ({
+    ...g,
+    members: (memberRows ?? [])
+      .filter((m) => m.group_id === g.id)
+      .map((m) => ({
+        id: m.user_id,
+        username: m.profiles?.username ?? "Netko",
+        role: m.role,
+      })),
+  }));
 
   return (
     <main className="flex flex-1 flex-col">
@@ -49,6 +75,8 @@ export default async function PostavkePage() {
           </div>
         </div>
       </section>
+
+      <MojeGrupe groups={grupe} myId={user.id} />
 
       <section className="mt-10">
         <form action={logout}>
