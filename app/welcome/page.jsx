@@ -85,7 +85,7 @@ const FEATURES = [
       </>
     ),
     title: "Streak",
-    body: "Nižeš dolaske, gradiš streak. Ne prekini ga.",
+    body: "Nižeš dolaske, gradiš streak. Ne prekidaj ga.",
   },
 ];
 
