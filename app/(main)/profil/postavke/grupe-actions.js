@@ -166,7 +166,7 @@ export async function createGroup(prevState, formData) {
     .eq("id", user.id);
 
   revalidatePath("/", "layout");
-  return { ok: true, message: "Grupa osnovana. Ti si gazda, ne zajebi." };
+  return { ok: true, message: "Grupa osnovana. Ti si gazda, nemoj zajebat." };
 }
 
 export async function leaveGroup(groupId) {
