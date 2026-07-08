@@ -17,6 +17,7 @@ const timeFmt = new Intl.DateTimeFormat("hr-HR", {
 });
 
 const PHOTO_MAX_SIDE = 1024;
+const THUMB_MAX_SIDE = 320;
 const NAJAVA_TRAJANJE_MS = 45 * 60 * 1000;
 
 export default function Sank({
@@ -199,6 +200,7 @@ export default function Sank({
           checkinId: u.active.id,
           arrivedAt: u.active.checked_in_at,
           photoUrl: u.active.photo_url ?? null,
+          thumbUrl: u.active.thumb_url ?? null,
         });
       } else if (announcedAt && (!u?.cancelledAt || announcedAt > u.cancelledAt)) {
         arriving.push({ ...p, announcedAt });
@@ -232,9 +234,13 @@ export default function Sank({
 
   // Šalje checkin serveru u pozadini; ne blokira UI (optimistički red je već
   // na ekranu prije ovog poziva). Na grešku miče tmp red i vraća false.
-  async function submitCheckIn(photoUrl, tmpKey) {
+  async function submitCheckIn(photoUrl, thumbUrl, tmpKey) {
     const coords = await (geoRef.current ?? requestLocation());
-    const result = await checkIn(photoUrl ?? undefined, coords ?? undefined);
+    const result = await checkIn(
+      photoUrl ?? undefined,
+      thumbUrl ?? undefined,
+      coords ?? undefined
+    );
     if (result?.error) {
       setError(result.error);
       setRows((prev) => {
@@ -261,10 +267,11 @@ export default function Sank({
         checked_in_at: new Date().toISOString(),
         cancelled_at: null,
         photo_url: photoUrl ?? null,
+        thumb_url: null,
       },
     }));
     startTransition(async () => {
-      await submitCheckIn(photoUrl, tmpKey);
+      await submitCheckIn(photoUrl, null, tmpKey);
     });
   }
 
@@ -289,7 +296,10 @@ export default function Sank({
       try {
         // Kompresija je brza (canvas) — čim imamo blob, pokaži se u listi
         // odmah s lokalnim previewom; upload i checkin idu u pozadini.
-        const blob = await downscaleToBlob(file, PHOTO_MAX_SIDE);
+        const [blob, thumbBlob] = await Promise.all([
+          downscaleToBlob(file, PHOTO_MAX_SIDE),
+          downscaleToBlob(file, THUMB_MAX_SIDE, 0.8),
+        ]);
         const previewUrl = URL.createObjectURL(blob);
         previewUrlRef.current = previewUrl;
         setRows((prev) => ({
@@ -300,20 +310,31 @@ export default function Sank({
             checked_in_at: new Date().toISOString(),
             cancelled_at: null,
             photo_url: previewUrl,
+            thumb_url: previewUrl,
           },
         }));
 
         const supabase = createClient();
-        const path = `${currentUserId}/${Date.now()}.jpg`;
-        const { error: uploadError } = await supabase.storage
-          .from("dokazi")
-          .upload(path, blob, {
-            contentType: "image/jpeg",
-            cacheControl: "31536000",
-          });
+        const ts = Date.now();
+        const path = `${currentUserId}/${ts}.jpg`;
+        const thumbPath = `${currentUserId}/${ts}_thumb.jpg`;
+        const [{ error: uploadError }, { error: thumbUploadError }] = await Promise.all([
+          supabase.storage
+            .from("dokazi")
+            .upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000" }),
+          supabase.storage
+            .from("dokazi")
+            .upload(thumbPath, thumbBlob, {
+              contentType: "image/jpeg",
+              cacheControl: "31536000",
+            }),
+        ]);
         if (uploadError) throw new Error(uploadError.message);
         const { data } = supabase.storage.from("dokazi").getPublicUrl(path);
-        const ok = await submitCheckIn(data.publicUrl, tmpKey);
+        const thumbPublicUrl = thumbUploadError
+          ? null
+          : supabase.storage.from("dokazi").getPublicUrl(thumbPath).data.publicUrl;
+        const ok = await submitCheckIn(data.publicUrl, thumbPublicUrl, tmpKey);
         if (!ok) setAskPhoto(true);
       } catch {
         setRows((prev) => {
@@ -547,10 +568,12 @@ export default function Sank({
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={p.photoUrl}
+                        src={p.thumbUrl ?? p.photoUrl}
                         alt=""
                         width={40}
                         height={40}
+                        loading="lazy"
+                        decoding="async"
                         className="h-10 w-10 rounded-lg border border-accent/30 object-cover"
                       />
                       {(reactions[p.checkinId]?.length ?? 0) > 0 && (

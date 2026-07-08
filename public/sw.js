@@ -1,6 +1,7 @@
 // Minimalni SW za instalabilnost. Network-first: uvijek svježi podaci,
 // cache služi samo kao offline fallback.
-const CACHE = "lakat-v2";
+const CACHE = "lakat-v3";
+const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("push", (event) => {
   let data = {};
@@ -32,7 +33,8 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
-self.addEventListener("install", () => {
+self.addEventListener("install", (event) => {
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.add(OFFLINE_URL)));
   self.skipWaiting();
 });
 
@@ -63,14 +65,14 @@ self.addEventListener("fetch", (event) => {
         return response;
       })
       .catch(() =>
-        caches.match(request).then(
-          (cached) =>
-            cached ||
-            new Response("Nema neta, nema šanka.", {
-              status: 503,
-              headers: { "Content-Type": "text/plain; charset=utf-8" },
-            })
-        )
+        caches.match(request).then((cached) => {
+          if (cached) return cached;
+          if (request.mode === "navigate") return caches.match(OFFLINE_URL);
+          return new Response("Nema neta, nema šanka.", {
+            status: 503,
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+          });
+        })
       )
   );
 });

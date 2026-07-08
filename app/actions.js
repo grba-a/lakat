@@ -39,19 +39,23 @@ export async function switchGroup(groupId) {
   return { ok: true };
 }
 
-export async function checkIn(photoUrl, coords) {
+export async function checkIn(photoUrl, thumbUrl, coords) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Slika smije biti samo iz vlastite mape u dokazi bucketu — sve drugo
-  // se tiho odbacuje (nitko ne podmeće tuđe/vanjske URL-ove)
+  // Slika (i thumb) smije biti samo iz vlastite mape u dokazi bucketu —
+  // sve drugo se tiho odbacuje (nitko ne podmeće tuđe/vanjske URL-ove)
+  const dokaziPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/dokazi/${user.id}/`;
   let photo_url = null;
-  if (typeof photoUrl === "string") {
-    const prefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/dokazi/${user.id}/`;
-    if (photoUrl.startsWith(prefix)) photo_url = photoUrl;
+  if (typeof photoUrl === "string" && photoUrl.startsWith(dokaziPrefix)) {
+    photo_url = photoUrl;
+  }
+  let thumb_url = null;
+  if (photo_url && typeof thumbUrl === "string" && thumbUrl.startsWith(dokaziPrefix)) {
+    thumb_url = thumbUrl;
   }
 
   // Lokacija je opcionalna; prihvaćaju se samo smislene koordinate
@@ -96,7 +100,7 @@ export async function checkIn(photoUrl, coords) {
 
   const { error } = await supabase
     .from("checkins")
-    .insert({ user_id: user.id, group_id: active.id, photo_url, lat, lng });
+    .insert({ user_id: user.id, group_id: active.id, photo_url, thumb_url, lat, lng });
   if (error) {
     return { error: `Checkin nije prošao: ${error.message}` };
   }

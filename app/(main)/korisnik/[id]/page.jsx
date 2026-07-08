@@ -7,7 +7,6 @@ import { getDayKey } from "@/lib/day";
 import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
 import Avatar from "../../avatar";
 import Heatmap from "../../heatmap";
-import Galerija from "../../galerija";
 
 const dateFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -37,29 +36,22 @@ export default async function KorisnikPage({ params }) {
   const { active } = await getActiveGroup(supabase, user.id);
   if (!active) notFound();
 
-  const [{ data: profile }, checkins, { data: photos }, { data: membership }] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .select("username, created_at, avatar_url")
-        .eq("id", id)
-        .maybeSingle(),
-      fetchAllCheckins(supabase, id, active.id),
-      supabase
-        .from("checkins")
-        .select("id, checked_in_at, photo_url")
-        .eq("user_id", id)
-        .eq("group_id", active.id)
-        .not("photo_url", "is", null)
-        .order("checked_in_at", { ascending: false })
-        .limit(60),
-      supabase
-        .from("group_members")
-        .select("joined_at")
-        .eq("group_id", active.id)
-        .eq("user_id", id)
-        .maybeSingle(),
-    ]);
+  // Galerija (povijesne dokazne slike) je privatna — vidi je samo vlasnik
+  // na /profil, ovdje se namjerno ne dohvaća ni prikazuje.
+  const [{ data: profile }, checkins, { data: membership }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("username, created_at, avatar_url")
+      .eq("id", id)
+      .maybeSingle(),
+    fetchAllCheckins(supabase, id, active.id),
+    supabase
+      .from("group_members")
+      .select("joined_at")
+      .eq("group_id", active.id)
+      .eq("user_id", id)
+      .maybeSingle(),
+  ]);
 
   if (!profile || !membership) notFound();
 
@@ -128,8 +120,6 @@ export default async function KorisnikPage({ params }) {
       <p className="mt-6 text-sm text-muted">{comment(pct)}</p>
 
       <Heatmap daySet={daySet} todayKey={todayKey} />
-
-      <Galerija items={photos ?? []} />
     </main>
   );
 }

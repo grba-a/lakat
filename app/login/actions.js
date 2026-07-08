@@ -18,5 +18,7 @@ export async function login(prevState, formData) {
     return { error: "Kriva kombinacija. Otrijezni se pa probaj opet." };
   }
 
-  redirect("/");
+  const next = formData.get("next")?.toString();
+  const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  redirect(safeNext);
 }

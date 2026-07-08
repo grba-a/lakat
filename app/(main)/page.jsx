@@ -39,15 +39,8 @@ export default async function Home() {
   // Sve na ekranu živi u aktivnoj grupi — prebacivanjem grupe mijenja se
   // popis, slike, statistika, sve
   const { active, groups } = await getActiveGroup(supabase, user.id);
-  if (!active) {
-    return (
-      <main className="flex flex-1 flex-col">
-        <p className="mt-10 rounded-card border border-danger/30 bg-danger/10 px-4 py-4 text-sm font-bold text-danger">
-          Nisi ni u jednoj grupi. Javi se onome tko te izbacio.
-        </p>
-      </main>
-    );
-  }
+  // Bez profila i/ili grupe (npr. svježi OAuth korisnik) — dovrši prijavu
+  if (!active) redirect("/onboarding");
 
   const dayStart = getCurrentDayStart();
   const [{ data: profiles }, { data: checkins }, allCheckins, ...flashbackResults] =
@@ -61,7 +54,7 @@ export default async function Home() {
         .order("username"),
       supabase
         .from("checkins")
-        .select("id, user_id, checked_in_at, cancelled_at, photo_url")
+        .select("id, user_id, checked_in_at, cancelled_at, photo_url, thumb_url")
         .eq("group_id", active.id)
         .gte("checked_in_at", dayStart.toISOString())
         .order("checked_in_at", { ascending: true }),
@@ -71,7 +64,7 @@ export default async function Home() {
         const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
         return supabase
           .from("checkins")
-          .select("id, user_id, checked_in_at, photo_url")
+          .select("id, user_id, checked_in_at, photo_url, thumb_url")
           .eq("group_id", active.id)
           .not("photo_url", "is", null)
           .gte("checked_in_at", start.toISOString())

@@ -1,13 +1,17 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { Suspense, useActionState, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { register } from "./actions";
+import OauthButtons from "../login/oauth-buttons";
 
 const inputClass =
   "h-14 rounded-field border border-white/10 bg-white/[0.05] px-4 text-base outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted/50 focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(74,222,128,0.15)]";
 
-export default function RegisterPage() {
+function RegisterForm() {
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "/";
   const [state, formAction, isPending] = useActionState(register, null);
   const [mode, setMode] = useState("join");
 
@@ -25,6 +29,8 @@ export default function RegisterPage() {
         action={formAction}
         className="mt-10 flex flex-col gap-5 animate-[rise_300ms_var(--ease-fluid)_both]"
       >
+        <input type="hidden" name="next" value={next} />
+
         <label className="flex flex-col gap-2">
           <span className="text-xs font-bold uppercase tracking-widest text-muted">
             Email
@@ -164,15 +170,25 @@ export default function RegisterPage() {
         </button>
       </form>
 
+      <OauthButtons next={next} />
+
       <p className="mt-8 text-center text-sm text-muted">
         Već si registriran?{" "}
         <Link
-          href="/login"
+          href={next !== "/" ? `/login?next=${encodeURIComponent(next)}` : "/login"}
           className="font-bold text-accent underline underline-offset-4"
         >
           Ulogiraj se.
         </Link>
       </p>
     </main>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterForm />
+    </Suspense>
   );
 }
