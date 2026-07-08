@@ -168,7 +168,7 @@ function GroupCard({ group, myId, onAction }) {
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   return (
-    <div className="surface-2 rounded-card">
+    <div className="rounded-card border border-white/10 bg-surface shadow-soft">
       <div className="flex items-center justify-between gap-2 px-4 py-4">
         <span className="flex flex-col">
           <span className="font-display text-xl uppercase tracking-wide">
@@ -254,7 +254,7 @@ export default function MojeGrupe({ groups, myId }) {
         </p>
       ) : (
         <div className="mt-4 flex flex-col gap-3">
-          <details className="surface-2 rounded-card">
+          <details className="rounded-card border border-white/10 bg-surface shadow-soft">
             <summary className="cursor-pointer list-none px-4 py-4 font-display text-xl uppercase tracking-wide text-muted">
               Pridruži se grupi
             </summary>
@@ -290,7 +290,7 @@ export default function MojeGrupe({ groups, myId }) {
             </form>
           </details>
 
-          <details className="surface-2 rounded-card">
+          <details className="rounded-card border border-white/10 bg-surface shadow-soft">
             <summary className="cursor-pointer list-none px-4 py-4 font-display text-xl uppercase tracking-wide text-muted">
               Osnuj novu grupu
             </summary>
