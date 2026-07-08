@@ -33,49 +33,31 @@ export default async function ProfilPage() {
   // Sve na profilu (statistika, heatmap, galerija) živi u aktivnoj grupi
   const { active } = await getActiveGroup(supabase, user.id);
 
-  const [
-    { data: profile },
-    checkins,
-    { data: photos },
-    { data: membership },
-    { count: pendingFriends },
-    { count: pendingInvites },
-  ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("username, created_at, avatar_url")
-      .eq("id", user.id)
-      .maybeSingle(),
-    fetchAllCheckins(supabase, user.id, active?.id),
-    supabase
-      .from("checkins")
-      .select("id, checked_in_at, photo_url, thumb_url")
-      .eq("user_id", user.id)
-      .eq("group_id", active?.id ?? "00000000-0000-0000-0000-000000000000")
-      .not("photo_url", "is", null)
-      .order("checked_in_at", { ascending: false })
-      .limit(60),
-    active
-      ? supabase
-          .from("group_members")
-          .select("joined_at")
-          .eq("group_id", active.id)
-          .eq("user_id", user.id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase
-      .from("friendships")
-      .select("id", { count: "exact", head: true })
-      .eq("addressee", user.id)
-      .eq("status", "pending"),
-    supabase
-      .from("group_invites")
-      .select("id", { count: "exact", head: true })
-      .eq("invitee", user.id)
-      .eq("status", "pending"),
-  ]);
-
-  const pendingCount = (pendingFriends ?? 0) + (pendingInvites ?? 0);
+  const [{ data: profile }, checkins, { data: photos }, { data: membership }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("username, created_at, avatar_url")
+        .eq("id", user.id)
+        .maybeSingle(),
+      fetchAllCheckins(supabase, user.id, active?.id),
+      supabase
+        .from("checkins")
+        .select("id, checked_in_at, photo_url, thumb_url")
+        .eq("user_id", user.id)
+        .eq("group_id", active?.id ?? "00000000-0000-0000-0000-000000000000")
+        .not("photo_url", "is", null)
+        .order("checked_in_at", { ascending: false })
+        .limit(60),
+      active
+        ? supabase
+            .from("group_members")
+            .select("joined_at")
+            .eq("group_id", active.id)
+            .eq("user_id", user.id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
 
   const daySet = userDaySets(checkins).get(user.id) ?? new Set();
   const todayKey = getDayKey(new Date());
@@ -163,20 +145,6 @@ export default async function ProfilPage() {
       </section>
 
       <p className="mt-6 text-sm text-muted">{comment(pct)}</p>
-
-      <Link
-        href="/profil/frendovi"
-        className="surface-2 pressable-soft mt-6 flex h-14 items-center justify-between rounded-row px-4"
-      >
-        <span className="font-display text-lg uppercase tracking-wide">Kompanjoni</span>
-        {pendingCount > 0 ? (
-          <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-black">
-            {pendingCount}
-          </span>
-        ) : (
-          <span className="text-muted">→</span>
-        )}
-      </Link>
 
       <Heatmap daySet={daySet} todayKey={todayKey} />
 

@@ -32,16 +32,20 @@ export default async function MainLayout({ children }) {
       <OfflineBanner />
       <PresenceHeartbeat />
       <header
-        className="flex items-center gap-3"
+        className="flex items-center"
         style={{ viewTransitionName: "app-header" }}
       >
-        <p className="font-display text-3xl uppercase leading-none tracking-tight">
-          Lakat<span className="text-accent">.</span>
-        </p>
-        {active && groups.length > 1 && (
-          <GroupSwitcher groups={groups} activeId={active.id} />
-        )}
-        <div className="ml-auto">
+        <div className="flex-1">
+          <p className="font-display text-3xl uppercase leading-none tracking-tight">
+            Lakat<span className="text-accent">.</span>
+          </p>
+        </div>
+        <div className="flex flex-1 justify-center">
+          {active && groups.length > 1 && (
+            <GroupSwitcher groups={groups} activeId={active.id} />
+          )}
+        </div>
+        <div className="flex flex-1 justify-end">
           <FriendsBadge initialCount={activeFriends} />
         </div>
       </header>

@@ -58,18 +58,18 @@ export default function GroupSwitcher({ groups, activeId }) {
       </button>
 
       {open && (
-        <div className="glass absolute left-0 top-8 z-30 flex min-w-40 flex-col overflow-hidden rounded-card border border-white/10 shadow-float">
+        <div className="absolute left-1/2 top-9 z-30 flex min-w-44 -translate-x-1/2 flex-col overflow-hidden rounded-card border border-white/15 bg-surface shadow-float">
           {groups.map((g) => (
             <button
               key={g.id}
               type="button"
               onClick={() => handlePick(g.id)}
-              className={`pressable-soft px-4 py-3 text-left text-sm font-bold ${
-                g.id === active.id ? "text-accent" : "text-muted"
+              className={`pressable-soft border-b border-white/5 px-4 py-3 text-left text-sm font-bold last:border-b-0 ${
+                g.id === active.id ? "text-accent" : "text-foreground"
               }`}
             >
               {g.name}
-              {g.id === active.id && <span className="ml-2">●</span>}
+              {g.id === active.id && <span className="ml-2 text-accent">●</span>}
             </button>
           ))}
         </div>
