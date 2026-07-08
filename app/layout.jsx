@@ -1,5 +1,6 @@
 import { Anton, Archivo } from "next/font/google";
 import SwRegister from "./sw-register";
+import BootSplash from "./boot-splash";
 import "./globals.css";
 
 const anton = Anton({
@@ -31,6 +32,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="hr" className={`${anton.variable} ${archivo.variable}`}>
       <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
+        <BootSplash />
         {children}
         <SwRegister />
       </body>

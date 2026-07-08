@@ -119,6 +119,43 @@ input,
   }
 }
 
+/* Boot splash — brendirani loader dok se app diže na sporoj vezi.
+   Fade-in kasni 300ms pa brzi korisnici (hidracija < 300ms) ne vide bljesak.
+   Suptilni zeleni sjaj iza wordmarka za dubinu. */
+.boot-splash {
+  opacity: 0;
+  animation: boot-in 260ms var(--ease-fluid) 300ms forwards;
+  background:
+    radial-gradient(60% 40% at 50% 40%, rgba(74, 222, 128, 0.08), transparent 70%),
+    var(--background);
+}
+.boot-dot {
+  display: inline-block;
+  animation: boot-pulse 1.4s var(--ease-fluid) infinite;
+}
+/* Uklanjanje na hidraciji — pregazi fade-in i nježno izađe */
+.boot-splash.boot-leaving {
+  animation: none;
+  opacity: 0;
+  transition: opacity 220ms var(--ease-fluid);
+}
+@keyframes boot-in {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes boot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.25;
+    transform: scale(0.9);
+  }
+}
+
 /* Atmosfera — statični sjaj da blur ima što mutiti; ne smije na wrapper
    jer bi filter na pretku razbio fixed nav na iOS Safariju */
 body::before {
