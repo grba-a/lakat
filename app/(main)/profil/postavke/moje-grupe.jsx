@@ -309,7 +309,7 @@ export default function MojeGrupe({ groups, myId }) {
                   minLength={2}
                   maxLength={32}
                   autoComplete="off"
-                  placeholder="npr. ime kafića"
+                  placeholder="npr. ime kafane"
                   className={inputClass}
                 />
               </label>

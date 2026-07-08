@@ -111,7 +111,7 @@ function RegisterForm() {
             minLength={2}
             maxLength={32}
             autoComplete="off"
-            placeholder={mode === "join" ? "kako se grupa zove" : "npr. ime kafića"}
+            placeholder={mode === "join" ? "kako se grupa zove" : "npr. ime kafane"}
             className={inputClass}
           />
         </label>

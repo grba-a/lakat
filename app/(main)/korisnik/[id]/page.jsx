@@ -16,7 +16,7 @@ const dateFmt = new Intl.DateTimeFormat("hr-HR", {
 });
 
 function comment(pct) {
-  if (pct >= 80) return "Praktički inventar kafića. Svaka čast.";
+  if (pct >= 80) return "Praktički inventar kafane. Svaka čast.";
   if (pct >= 50) return "Solidno. Šank ga prepoznaje.";
   if (pct >= 25) return "Mlako. Ekipa mu počinje zaboravljati lice.";
   return "Sramota. Titula pičke mjeseca mu maše iz daljine.";
