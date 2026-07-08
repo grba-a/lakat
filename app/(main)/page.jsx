@@ -14,6 +14,7 @@ import {
 import Sank from "./sank";
 import Memorije from "./memorije";
 import InstallHint from "./install-hint";
+import JoinGroupCard from "./join-group-card";
 
 // Flashback: isti datum unazad — dobiva smisao protokom vremena
 const FLASHBACKS = [
@@ -38,8 +39,23 @@ export default async function Home() {
   // Sve na ekranu živi u aktivnoj grupi — prebacivanjem grupe mijenja se
   // popis, slike, statistika, sve
   const { active } = await getActiveGroup(supabase, user.id);
-  // Bez profila i/ili grupe (npr. svježi OAuth korisnik) — dovrši prijavu
-  if (!active) redirect("/onboarding");
+  // Bez grupe — ostaješ u appu, ali umjesto liste dobiješ poziv da uđeš u grupu.
+  // "TU SAM" je prikazan ali onemogućen dok nemaš grupu.
+  if (!active) {
+    return (
+      <main className="flex flex-1 flex-col">
+        <button
+          type="button"
+          disabled
+          className="glass mt-6 flex h-40 w-full flex-col items-center justify-center gap-1 rounded-hero border-white/10 font-display text-6xl uppercase tracking-wide text-muted opacity-60"
+        >
+          Tu sam
+          <span className="text-xs tracking-widest">Prvo uđi u grupu</span>
+        </button>
+        <JoinGroupCard />
+      </main>
+    );
+  }
 
   const dayStart = getCurrentDayStart();
   const [{ data: profiles }, { data: checkins }, allCheckins, ...flashbackResults] =

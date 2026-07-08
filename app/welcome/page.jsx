@@ -4,24 +4,17 @@ const STEPS = [
   {
     n: 1,
     title: "Registriraj se",
-    body: "Email, lozinka, username. Ili odmah dolje uleti Googleom.",
+    body: "Samo email, lozinka i username. Bez gnjavaže.",
   },
   {
     n: 2,
-    title: "Grupa: beta",
-    body: "Kad te pita za grupu, upiši točno ovo:",
-    code: "beta",
+    title: "Uđi u BETA",
+    body: "Čim uđeš u app, na Šanku stisni gumb Uđi u BETA. Javna je, bez šifre.",
   },
   {
     n: 3,
-    title: "Šifra: beta123",
-    body: "Ista faca za šifru grupe:",
-    code: "beta123",
-  },
-  {
-    n: 4,
     title: "Instaliraj na home screen",
-    body: "Nakon prijave, dodaj Lakat na početni zaslon da ti stižu notifikacije kad netko dođe za šank.",
+    body: "Dodaj Lakat na početni zaslon da ti stižu notifikacije kad netko dođe za šank.",
   },
 ];
 

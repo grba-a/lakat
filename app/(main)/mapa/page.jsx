@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentDayStart } from "@/lib/day";
@@ -15,7 +16,20 @@ export default async function MapaPage() {
   if (!active) {
     return (
       <main className="flex flex-1 flex-col">
-        <p className="mt-10 text-sm text-muted">Nisi ni u jednoj grupi.</p>
+        <div className="glass mt-10 rounded-card p-5 text-center">
+          <p className="font-display text-2xl uppercase tracking-wide">
+            Nisi u grupi.
+          </p>
+          <p className="mt-2 text-sm text-muted">
+            Uđi u grupu da vidiš gdje se ekipa checkira.
+          </p>
+          <Link
+            href="/"
+            className="pressable-soft mt-5 inline-flex h-12 items-center justify-center rounded-button bg-accent px-6 font-display text-lg uppercase tracking-wide text-black"
+          >
+            Uđi u grupu
+          </Link>
+        </div>
       </main>
     );
   }

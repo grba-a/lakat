@@ -4,7 +4,6 @@ import { Suspense, useActionState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { login } from "./actions";
-import OauthButtons from "./oauth-buttons";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -67,8 +66,6 @@ function LoginForm() {
           {isPending ? "Malo strpljenja..." : "Pusti me unutra"}
         </button>
       </form>
-
-      <OauthButtons next={next} />
 
       <p className="mt-8 text-center text-sm text-muted">
         Nemaš račun?{" "}

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const MAX_GRUPA = 3;
+const PUBLIC_GROUP = "beta"; // javna grupa — ulazak bez šifre, dostupna svima
 
 async function requireUser() {
   const supabase = await createClient();
@@ -48,6 +49,49 @@ async function resetActiveGroup(admin, userId, removedGroupId) {
     .from("profiles")
     .update({ active_group_id: rest?.[0]?.group_id ?? null })
     .eq("id", userId);
+}
+
+// BETA je javna grupa — ulazak bez šifre, jednim tapom (za nove korisnike).
+export async function joinBeta() {
+  const user = await requireUser();
+  const admin = createAdminClient();
+
+  const { count } = await admin
+    .from("group_members")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  if ((count ?? 0) >= MAX_GRUPA) {
+    return { error: "Tri grupe su ti malo? Alkoholičaru." };
+  }
+
+  const { data: group } = await admin
+    .from("groups")
+    .select("id")
+    .ilike("name", PUBLIC_GROUP)
+    .maybeSingle();
+  if (!group) {
+    return { error: "Beta grupa trenutno ne postoji. Javi ekipi." };
+  }
+
+  const existing = await membershipOf(admin, group.id, user.id);
+  if (existing) {
+    return { error: "Već si u beti, koliko si popio?" };
+  }
+
+  const { error } = await admin
+    .from("group_members")
+    .insert({ group_id: group.id, user_id: user.id, role: "member" });
+  if (error) {
+    return { error: `Upis nije prošao: ${error.message}` };
+  }
+
+  await admin
+    .from("profiles")
+    .update({ active_group_id: group.id })
+    .eq("id", user.id);
+
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Upao si u betu. Dobrodošao u ludnicu." };
 }
 
 export async function joinGroup(prevState, formData) {
