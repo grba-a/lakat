@@ -35,6 +35,11 @@ export const metadata = {
     statusBarStyle: "black-translucent",
     startupImage,
   },
+  // Next 16 emitira samo standardni "mobile-web-app-capable"; stariji iOS i
+  // mehanizam za apple-touch-startup-image i dalje traže apple-prefiks.
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport = {

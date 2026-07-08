@@ -133,7 +133,17 @@ input,
   display: inline-block;
   animation: boot-pulse 1.4s var(--ease-fluid) infinite;
 }
-/* Uklanjanje na hidraciji — pregazi fade-in i nježno izađe */
+/* U instaliranom PWA-u (standalone) nema "brzog browser loada" pa nema ni
+   razloga za odgodu — prikaži splash ODMAH da ne bude crne rupe između iOS
+   native splasha (koji se makne) i boot splasha (koji bi inače kasnio 300ms) */
+@media (display-mode: standalone) {
+  .boot-splash {
+    opacity: 1;
+    animation: none;
+  }
+}
+/* Uklanjanje na hidraciji — pregazi fade-in i nježno izađe (specifičnost
+   .boot-splash.boot-leaving pobjeđuje i standalone override gore) */
 .boot-splash.boot-leaving {
   animation: none;
   opacity: 0;
