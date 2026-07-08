@@ -1,6 +1,7 @@
 import { Anton, Archivo } from "next/font/google";
 import SwRegister from "./sw-register";
 import BootSplash from "./boot-splash";
+import { APPLE_SPLASH } from "@/lib/apple-splash-devices";
 import "./globals.css";
 
 const anton = Anton({
@@ -14,6 +15,17 @@ const archivo = Archivo({
   variable: "--font-archivo",
 });
 
+// iOS native splash za instaliran PWA (pokriva crni ekran prije HTML-a).
+// Next stavlja apple-touch-startup-image <link> tagove u <head>.
+const startupImage = APPLE_SPLASH.map(({ w, h, dpr }) => {
+  const pw = Math.round(w * dpr);
+  const ph = Math.round(h * dpr);
+  return {
+    url: `/splash/apple-splash-${pw}-${ph}.png`,
+    media: `screen and (device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: portrait)`,
+  };
+});
+
 export const metadata = {
   title: "Lakat",
   description: "Tko je za šankom, a tko je pička. Uživo.",
@@ -21,6 +33,7 @@ export const metadata = {
     capable: true,
     title: "Lakat",
     statusBarStyle: "black-translucent",
+    startupImage,
   },
 };
 
