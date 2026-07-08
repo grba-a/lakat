@@ -166,6 +166,28 @@ input,
   }
 }
 
+/* Custom scrollbar — tanka, brand zelena. Radi na Androidu/desktopu
+   (WebKit/Chromium + Firefox); iOS Safari ignorira stiliziranje scrollbara. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(74, 222, 128, 0.5) transparent;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(74, 222, 128, 0.45);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:active,
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(74, 222, 128, 0.7);
+}
+
 /* Atmosfera — statični sjaj da blur ima što mutiti; ne smije na wrapper
    jer bi filter na pretku razbio fixed nav na iOS Safariju */
 body::before {
