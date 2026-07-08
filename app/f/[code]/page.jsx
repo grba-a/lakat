@@ -32,7 +32,7 @@ export default async function FriendLinkPage({ params }) {
         {target.username}
         <span className="text-accent">.</span>
       </h1>
-      <p className="mt-3 text-sm text-muted">Zove te za kompanjona.</p>
+      <p className="mt-3 text-sm text-muted">Zove te za pajdaša.</p>
 
       <AddByLinkButton code={normalized} />
     </main>
