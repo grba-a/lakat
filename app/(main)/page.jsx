@@ -13,7 +13,6 @@ import {
 } from "@/lib/stats";
 import Sank from "./sank";
 import Memorije from "./memorije";
-import GroupSwitcher from "./group-switcher";
 import InstallHint from "./install-hint";
 
 // Flashback: isti datum unazad — dobiva smisao protokom vremena
@@ -38,7 +37,7 @@ export default async function Home() {
 
   // Sve na ekranu živi u aktivnoj grupi — prebacivanjem grupe mijenja se
   // popis, slike, statistika, sve
-  const { active, groups } = await getActiveGroup(supabase, user.id);
+  const { active } = await getActiveGroup(supabase, user.id);
   // Bez profila i/ili grupe (npr. svježi OAuth korisnik) — dovrši prijavu
   if (!active) redirect("/onboarding");
 
@@ -146,9 +145,6 @@ export default async function Home() {
 
   return (
     <main className="flex flex-1 flex-col">
-      <div className="mt-4 flex justify-end">
-        <GroupSwitcher groups={groups} activeId={active.id} />
-      </div>
       <Sank
         key={active.id}
         groupId={active.id}

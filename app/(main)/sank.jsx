@@ -210,7 +210,7 @@ export default function Sank({
         absent.push(p);
       }
     }
-    present.sort((a, b) => a.arrivedAt.localeCompare(b.arrivedAt));
+    present.sort((a, b) => b.arrivedAt.localeCompare(a.arrivedAt));
     arriving.sort((a, b) => b.announcedAt.localeCompare(a.announcedAt));
     fled.sort((a, b) => b.cancelledAt.localeCompare(a.cancelledAt));
     return { present, arriving, fled, absent };

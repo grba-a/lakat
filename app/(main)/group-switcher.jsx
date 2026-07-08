@@ -23,11 +23,11 @@ export default function GroupSwitcher({ groups, activeId }) {
     });
   }
 
+  // S jednom grupom se u headeru uopće ne renderira (guard u layoutu);
+  // ova grana je tihi fallback ako se komponenta iskoristi drugdje.
   if (groups.length < 2) {
     return (
-      <span className="inline-flex h-9 items-center rounded-full border border-white/10 bg-white/[0.04] px-3 text-xs font-bold uppercase tracking-widest text-muted">
-        {active.name}
-      </span>
+      <span className="text-sm font-bold text-muted">{active.name}</span>
     );
   }
 
@@ -37,13 +37,13 @@ export default function GroupSwitcher({ groups, activeId }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={isPending}
-        className="pressable-soft inline-flex h-9 items-center gap-1.5 rounded-full border border-accent/25 bg-accent/10 px-3 text-xs font-bold uppercase tracking-widest text-accent disabled:opacity-50"
+        className="pressable-soft inline-flex items-center gap-1 text-sm font-bold text-muted disabled:opacity-50"
         aria-label="Promijeni grupu"
       >
-        {isPending ? "Sekunda..." : active.name}
+        {isPending ? "..." : active.name}
         <svg
-          width="12"
-          height="12"
+          width="14"
+          height="14"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -58,13 +58,13 @@ export default function GroupSwitcher({ groups, activeId }) {
       </button>
 
       {open && (
-        <div className="glass absolute right-0 top-11 z-30 flex min-w-40 flex-col overflow-hidden rounded-card border border-white/10 shadow-float">
+        <div className="glass absolute left-0 top-8 z-30 flex min-w-40 flex-col overflow-hidden rounded-card border border-white/10 shadow-float">
           {groups.map((g) => (
             <button
               key={g.id}
               type="button"
               onClick={() => handlePick(g.id)}
-              className={`pressable-soft px-4 py-3 text-left text-xs font-bold uppercase tracking-widest ${
+              className={`pressable-soft px-4 py-3 text-left text-sm font-bold ${
                 g.id === active.id ? "text-accent" : "text-muted"
               }`}
             >

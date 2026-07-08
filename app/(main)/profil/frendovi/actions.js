@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/push";
+import { countActiveFriends } from "@/lib/friends";
 
 const MAX_GRUPA = 3;
 
@@ -252,4 +253,15 @@ export async function heartbeat() {
     .from("profiles")
     .update({ last_seen_at: new Date().toISOString() })
     .eq("id", user.id);
+}
+
+// Broj trenutno aktivnih frendova — friends badge u headeru ovo poziva
+// periodički jer se layout ne re-fetcha pri client navigaciji
+export async function getActiveFriendsCount() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return 0;
+  return countActiveFriends(supabase, user.id);
 }

@@ -77,7 +77,12 @@ function FriendRow({ friend, groups, onAction, style }) {
   const presence = presenceLabel(friend.last_seen_at);
 
   return (
-    <li className="surface-2 rounded-row" style={style}>
+    <li
+      className={`surface-2 rounded-row transition-opacity ${
+        presence.online ? "" : "opacity-50"
+      }`}
+      style={style}
+    >
       <div className="flex min-h-14 items-center justify-between gap-2 px-4 py-2">
         <span className="flex items-center gap-3 font-bold">
           <Avatar username={friend.username} avatarUrl={friend.avatar_url} size={32} />
