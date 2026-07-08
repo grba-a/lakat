@@ -168,7 +168,7 @@ export default async function ProfilPage() {
         href="/profil/frendovi"
         className="surface-2 pressable-soft mt-6 flex h-14 items-center justify-between rounded-row px-4"
       >
-        <span className="font-display text-lg uppercase tracking-wide">Frendovi</span>
+        <span className="font-display text-lg uppercase tracking-wide">Kompanjoni</span>
         {pendingCount > 0 ? (
           <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-black">
             {pendingCount}

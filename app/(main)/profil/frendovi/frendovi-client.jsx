@@ -221,7 +221,7 @@ export default function FrendoviClient({
 
       <section className="mt-8">
         <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
-          Dodaj frenda
+          Dodaj kompanjona
         </h2>
         <form onSubmit={handleAdd} className="mt-4 flex gap-2">
           <input
@@ -325,10 +325,10 @@ export default function FrendoviClient({
 
       <section className="mb-4 mt-8">
         <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
-          Frendovi {friends.length > 0 && `(${friends.length})`}
+          Kompanjoni {friends.length > 0 && `(${friends.length})`}
         </h2>
         {friends.length === 0 && outgoing.length === 0 && (
-          <p className="mt-4 text-sm text-muted">Nemaš frendova. Tragično.</p>
+          <p className="mt-4 text-sm text-muted">Nemaš kompanjona. Tragično.</p>
         )}
         <ul className="stagger mt-4 flex flex-col gap-2">
           {friends.map((f, i) => (

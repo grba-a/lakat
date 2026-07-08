@@ -46,7 +46,7 @@ export default function FriendsBadge({ initialCount = 0 }) {
   return (
     <Link
       href="/profil/frendovi"
-      aria-label={`Frendovi — ${count} aktivnih`}
+      aria-label={`Kompanjoni — ${count} aktivnih`}
       className="pressable inline-flex items-center gap-1.5 rounded-full px-1 py-1 text-accent/70 active:bg-white/5"
     >
       <svg

@@ -45,13 +45,13 @@ export async function sendFriendRequest(code) {
     return { error: "Nema tog koda. Provjeri jesi li dobro prepisao." };
   }
   if (target.id === user.id) {
-    return { error: "Sebe ne možeš zafrendati, koliko god htio." };
+    return { error: "Sebe ne možeš dodati za kompanjona, koliko god htio." };
   }
 
   const existing = await friendshipBetween(admin, user.id, target.id);
   if (existing) {
     if (existing.status === "accepted") {
-      return { error: "Već ste frendovi." };
+      return { error: "Već ste kompanjoni." };
     }
     if (existing.requester === target.id) {
       // Već te je on zvao — prihvati umjesto duplikata
@@ -61,7 +61,7 @@ export async function sendFriendRequest(code) {
         .eq("id", existing.id);
       if (error) return { error: `Nije prošlo: ${error.message}` };
       revalidatePath("/profil/frendovi");
-      return { ok: true, message: "Već te je zvao. Sad ste frendovi." };
+      return { ok: true, message: "Već te je zvao. Sad ste kompanjoni." };
     }
     return { error: "Zahtjev je već poslan, budi strpljiv." };
   }
@@ -79,7 +79,7 @@ export async function sendFriendRequest(code) {
       .maybeSingle();
     await notifyUser({
       userId: target.id,
-      body: `${me?.username ?? "Netko"} te želi za frenda. Sumnjivo.`,
+      body: `${me?.username ?? "Netko"} te želi za kompanjona. Sumnjivo.`,
     });
   } catch {
     // best-effort
@@ -115,7 +115,7 @@ export async function respondFriendRequest(id, accept) {
     .eq("id", id);
   if (error) return { error: `Nije prošlo: ${error.message}` };
   revalidatePath("/profil/frendovi");
-  return { ok: true, message: "Novi frend. Čestitke, valjda." };
+  return { ok: true, message: "Novi kompanjon. Čestitke, valjda." };
 }
 
 export async function removeFriend(id) {
@@ -151,7 +151,7 @@ export async function inviteToGroup(groupId, friendId) {
 
   const friendship = await friendshipBetween(admin, user.id, friendId);
   if (friendship?.status !== "accepted") {
-    return { error: "Taj ti nije frend (još)." };
+    return { error: "Taj ti nije kompanjon (još)." };
   }
 
   const { data: alreadyMember } = await admin
@@ -238,7 +238,7 @@ export async function respondGroupInvite(id, accept) {
 
   revalidatePath("/", "layout");
   revalidatePath("/profil/frendovi");
-  return { ok: true, message: "Upao si. Nema šifre, ima frendova." };
+  return { ok: true, message: "Upao si. Nema šifre, ima kompanjona." };
 }
 
 // Heartbeat: samo dok je app u foregroundu (client to sam pazi), obična

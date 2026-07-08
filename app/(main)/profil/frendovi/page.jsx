@@ -93,7 +93,7 @@ export default async function FrendoviPage() {
 
       <section className="mt-4">
         <h1 className="font-display text-5xl uppercase leading-none tracking-tight">
-          Frendovi<span className="text-accent">.</span>
+          Kompanjoni<span className="text-accent">.</span>
         </h1>
       </section>
 
