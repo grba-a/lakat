@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# QR kartice (print tooling, nije dio appa)
+qr-cards/
