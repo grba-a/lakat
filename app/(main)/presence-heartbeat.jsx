@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { heartbeat } from "./profil/frendovi/actions";
 
-const INTERVAL_MS = 60_000;
+const INTERVAL_MS = 180_000;
 
 // Javlja "zadnje viđen" dok je app u foregroundu; pauzira kad je tab
 // pozadinski da ne troši bateriju/network uzalud

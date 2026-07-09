@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { fetchAllCheckins } from "@/lib/checkins";
-import { getActiveGroup } from "@/lib/groups";
 import { getDayKey } from "@/lib/day";
 import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
 import Avatar from "../../avatar";
@@ -24,16 +24,14 @@ function comment(pct) {
 
 export default async function KorisnikPage({ params }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) redirect("/login");
   if (user.id === id) redirect("/profil");
+  const supabase = await createClient();
 
   // Tuđi profil se gleda kroz aktivnu grupu; RLS ionako ne pušta profile
   // ljudi s kojima ne dijeliš nijednu grupu (maybeSingle vrati null)
-  const { active } = await getActiveGroup(supabase, user.id);
+  const { active } = await getActiveGroupFor(user.id);
   if (!active) notFound();
 
   // Galerija (povijesne dokazne slike) je privatna — vidi je samo vlasnik

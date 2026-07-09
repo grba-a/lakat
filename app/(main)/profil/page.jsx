@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { fetchAllCheckins } from "@/lib/checkins";
-import { getActiveGroup } from "@/lib/groups";
 import { getDayKey } from "@/lib/day";
 import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
 import Heatmap from "../heatmap";
@@ -24,14 +24,12 @@ function comment(pct) {
 }
 
 export default async function ProfilPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) redirect("/login");
+  const supabase = await createClient();
 
   // Sve na profilu (statistika, heatmap, galerija) živi u aktivnoj grupi
-  const { active } = await getActiveGroup(supabase, user.id);
+  const { active } = await getActiveGroupFor(user.id);
 
   const [{ data: profile }, checkins, { data: photos }, { data: membership }] =
     await Promise.all([

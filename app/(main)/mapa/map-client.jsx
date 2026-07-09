@@ -79,6 +79,7 @@ export default function MapClient({ groupId, profiles, initialCheckins }) {
   // Po korisniku: najnoviji AKTIVNI checkin s koordinatama
   const markers = useMemo(() => {
     const usernames = new Map(profiles.map((p) => [p.id, p.username]));
+    const emojis = new Map(profiles.map((p) => [p.id, p.map_emoji]));
     const byUser = new Map();
     for (const row of Object.values(rows)) {
       if (row.checked_in_at < dayStartIso) continue;
@@ -93,10 +94,11 @@ export default function MapClient({ groupId, profiles, initialCheckins }) {
       id: row.user_id,
       lat: row.lat,
       lng: row.lng,
-      emoji: emojiFor(row.user_id, dayKey),
+      // Odabrani emoji iz postavki, inače nasumičan (stabilan po danu)
+      emoji: emojis.get(row.user_id) || emojiFor(row.user_id, dayKey),
       username: usernames.get(row.user_id) ?? "Netko",
       time: timeFmt.format(new Date(row.checked_in_at)),
-      photoUrl: row.photo_url ?? null,
+      photoUrl: row.thumb_url ?? row.photo_url ?? null,
     }));
   }, [profiles, rows, dayStartIso]);
 

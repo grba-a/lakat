@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { fetchAllCheckins } from "@/lib/checkins";
-import { getActiveGroup } from "@/lib/groups";
 import { getDayKey } from "@/lib/day";
 import {
   userDaySets,
@@ -29,13 +29,11 @@ function formatPct(entry) {
 }
 
 export default async function ShamePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) redirect("/login");
+  const supabase = await createClient();
 
-  const { active } = await getActiveGroup(supabase, user.id);
+  const { active } = await getActiveGroupFor(user.id);
   if (!active) {
     return (
       <main className="flex flex-1 flex-col">

@@ -11,7 +11,7 @@ import {
   respondGroupInvite,
 } from "./actions";
 
-const ONLINE_WINDOW_MS = 3 * 60 * 1000;
+const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
 function presenceLabel(lastSeenAt) {
   if (!lastSeenAt) return { online: false, label: "Nikad aktivan" };

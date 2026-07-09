@@ -1,17 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getActiveFriendsCount } from "./profil/frendovi/actions";
 
-const REFRESH_MS = 60_000;
-
-// Ikona + broj trenutno aktivnih frendova u headeru. Layout se ne re-fetcha
-// pri client navigaciji pa broj sam osvježavamo (visibility-gated, isti
-// obrazac kao presence-heartbeat).
+// Ikona + broj trenutno aktivnih frendova u headeru. Bez stalnog pollinga —
+// osvježi na mount i kad se korisnik vrati u app (focus/visibility). Štedi
+// server/mrežu/bateriju; broj aktivnih se ionako sporo mijenja.
 export default function FriendsBadge({ initialCount = 0 }) {
   const [count, setCount] = useState(initialCount);
-  const timerRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -20,26 +17,16 @@ export default function FriendsBadge({ initialCount = 0 }) {
       const next = await getActiveFriendsCount();
       if (!cancelled && typeof next === "number") setCount(next);
     }
-    function start() {
-      refresh();
-      if (!timerRef.current) timerRef.current = setInterval(refresh, REFRESH_MS);
-    }
-    function stop() {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    }
     function onVisibility() {
-      if (document.visibilityState === "visible") start();
-      else stop();
+      if (document.visibilityState === "visible") refresh();
     }
-    start();
+    refresh();
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", refresh);
     return () => {
       cancelled = true;
-      stop();
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", refresh);
     };
   }, []);
 

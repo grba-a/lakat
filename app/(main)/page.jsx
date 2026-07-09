@@ -1,8 +1,9 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { getCurrentDayStart, getDayKey } from "@/lib/day";
 import { fetchAllCheckins } from "@/lib/checkins";
-import { getActiveGroup } from "@/lib/groups";
 import {
   userDaySets,
   computeStreaks,
@@ -13,34 +14,20 @@ import {
 } from "@/lib/stats";
 import Sank from "./sank";
 import Memorije from "./memorije";
+import Flashbacks from "./flashbacks";
 import InstallHint from "./install-hint";
 import JoinGroupCard from "./join-group-card";
 
-// Flashback: isti datum unazad — dobiva smisao protokom vremena
-const FLASHBACKS = [
-  { months: 3, label: "prije 3 mjeseca" },
-  { months: 6, label: "prije pola godine" },
-  { months: 12, label: "prije godinu dana" },
-];
-
-function shiftMonths(date, months) {
-  const d = new Date(date);
-  d.setUTCMonth(d.getUTCMonth() - months);
-  return d;
-}
+// Prozor za statistiku na Home: zadnjih 60 dana pokriva tekući mjesec (rang)
+// + streak titule (prag je 30 dana), a ne skenira cijelu povijest grupe.
+const STATS_WINDOW_DAYS = 60;
 
 export default async function Home() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) redirect("/login");
 
-  // Sve na ekranu živi u aktivnoj grupi — prebacivanjem grupe mijenja se
-  // popis, slike, statistika, sve
-  const { active } = await getActiveGroup(supabase, user.id);
+  const { active } = await getActiveGroupFor(user.id);
   // Bez grupe — ostaješ u appu, ali umjesto liste dobiješ poziv da uđeš u grupu.
-  // "TU SAM" je prikazan ali onemogućen dok nemaš grupu.
   if (!active) {
     return (
       <main className="flex flex-1 flex-col">
@@ -57,50 +44,39 @@ export default async function Home() {
     );
   }
 
+  const supabase = await createClient();
   const dayStart = getCurrentDayStart();
-  const [{ data: profiles }, { data: checkins }, allCheckins, ...flashbackResults] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .select(
-          "id, username, avatar_url, created_at, group_members!inner(group_id, joined_at)"
-        )
-        .eq("group_members.group_id", active.id)
-        .order("username"),
-      supabase
-        .from("checkins")
-        .select("id, user_id, checked_in_at, cancelled_at, photo_url, thumb_url")
-        .eq("group_id", active.id)
-        .gte("checked_in_at", dayStart.toISOString())
-        .order("checked_in_at", { ascending: true }),
-      fetchAllCheckins(supabase, undefined, active.id),
-      ...FLASHBACKS.map(({ months }) => {
-        const start = shiftMonths(dayStart, months);
-        const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-        return supabase
-          .from("checkins")
-          .select("id, user_id, checked_in_at, photo_url, thumb_url")
-          .eq("group_id", active.id)
-          .not("photo_url", "is", null)
-          .gte("checked_in_at", start.toISOString())
-          .lt("checked_in_at", end.toISOString());
-      }),
-    ]);
+  const windowStart = new Date(
+    dayStart.getTime() - STATS_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
 
-  // Statistika unutar grupe kreće od ulaska u grupu, ne od registracije
-  // računa (za staru ekipu su ta dva datuma ista — migracija ih izjednači)
+  const [{ data: profiles }, { data: checkins }, allCheckins] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "id, username, avatar_url, created_at, group_members!inner(group_id, joined_at)"
+      )
+      .eq("group_members.group_id", active.id)
+      .order("username"),
+    supabase
+      .from("checkins")
+      .select("id, user_id, checked_in_at, cancelled_at, photo_url, thumb_url")
+      .eq("group_id", active.id)
+      .gte("checked_in_at", dayStart.toISOString())
+      .order("checked_in_at", { ascending: true }),
+    fetchAllCheckins(supabase, undefined, active.id, windowStart),
+  ]);
+
+  // Statistika unutar grupe kreće od ulaska u grupu (za staru ekipu = registracija)
   const allProfiles = (profiles ?? []).map((p) => ({
     ...p,
     created_at: p.group_members?.[0]?.joined_at ?? p.created_at,
   }));
-  const usernames = new Map(allProfiles.map((p) => [p.id, p.username]));
+  const usernames = Object.fromEntries(allProfiles.map((p) => [p.id, p.username]));
 
-  // Reakcije za sve slike na ekranu (današnji popis + flashback)
-  // i žive najave dolaska — jedan upit svaka
-  const flashbackRows = FLASHBACKS.flatMap((_, i) => flashbackResults[i]?.data ?? []);
-  const reactionIds = [
-    ...new Set([...(checkins ?? []), ...flashbackRows].map((c) => c.id)),
-  ];
+  // Reakcije za današnje slike + žive najave — najave ne ovise o reactionIds
+  // pa idu paralelno u istom valu
+  const reactionIds = [...new Set((checkins ?? []).map((c) => c.id))];
   const najavaCutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString();
   const [{ data: reactionRows }, { data: najave }] = await Promise.all([
     reactionIds.length
@@ -124,7 +100,7 @@ export default async function Home() {
     });
   }
 
-  // Titule: streak po korisniku + kruna za aktualnu pičku mjeseca
+  // Titule: streak po korisniku + kruna za aktualnu pičku mjeseca (iz prozora)
   const daySets = userDaySets(allCheckins);
   const todayKey = getDayKey(new Date());
   const losers = worstOf(
@@ -141,23 +117,11 @@ export default async function Home() {
     titles[p.id] = titleFor(current, losers.some((l) => l.id === p.id));
   }
 
-  // Slike dana: dokazne slike iz današnjih check-inova (nakon 06:00 kreće
-  // prazan grid), najnovije prve
+  // Slike dana: dokazne slike iz današnjih check-inova, najnovije prve
   const memoryItems = (checkins ?? [])
     .filter((c) => c.photo_url)
     .sort((a, b) => new Date(b.checked_in_at) - new Date(a.checked_in_at))
-    .map((m) => ({
-      ...m,
-      username: usernames.get(m.user_id) ?? "Netko",
-    }));
-
-  const flashbackItems = FLASHBACKS.flatMap(({ label }, i) =>
-    (flashbackResults[i]?.data ?? []).map((m) => ({
-      ...m,
-      label,
-      username: usernames.get(m.user_id) ?? "Netko",
-    }))
-  );
+    .map((m) => ({ ...m, username: usernames[m.user_id] ?? "Netko" }));
 
   return (
     <main className="flex flex-1 flex-col">
@@ -174,10 +138,13 @@ export default async function Home() {
       <Memorije
         key={`memorije-${active.id}`}
         items={memoryItems}
-        flashbacks={flashbackItems}
+        flashbacks={[]}
         myId={user.id}
         initialReactions={reactionsByCheckin}
       />
+      <Suspense fallback={null}>
+        <Flashbacks groupId={active.id} usernames={usernames} myId={user.id} />
+      </Suspense>
       <InstallHint />
     </main>
   );

@@ -1,6 +1,6 @@
 import { ViewTransition } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { getActiveGroup } from "@/lib/groups";
+import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { countActiveFriends } from "@/lib/friends";
 import Nav from "./nav";
 import OfflineBanner from "./offline-banner";
@@ -9,17 +9,15 @@ import GroupSwitcher from "./group-switcher";
 import FriendsBadge from "./friends-badge";
 
 export default async function MainLayout({ children }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
 
   let active = null;
   let groups = [];
   let activeFriends = 0;
   if (user) {
+    const supabase = await createClient();
     const [groupData, friends] = await Promise.all([
-      getActiveGroup(supabase, user.id),
+      getActiveGroupFor(user.id),
       countActiveFriends(supabase, user.id),
     ]);
     active = groupData.active;

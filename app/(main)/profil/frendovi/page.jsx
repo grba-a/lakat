@@ -2,15 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getUser } from "@/lib/auth";
 import { getMyGroups } from "@/lib/groups";
 import FrendoviClient from "./frendovi-client";
 
 export default async function FrendoviPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) redirect("/login");
+  const supabase = await createClient();
 
   const [{ data: me }, { data: friendRows }, { data: inviteRows }, groups] =
     await Promise.all([

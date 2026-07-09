@@ -1,24 +1,24 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth";
 import { getMyGroups } from "@/lib/groups";
 import { logout } from "@/app/actions";
 import PushToggle from "../push-toggle";
 import UsernameForm from "../username-form";
 import PasswordForm from "../password-form";
 import MojeGrupe from "./moje-grupe";
+import MapEmojiPicker from "./map-emoji-picker";
 
 export default async function PostavkePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) redirect("/login");
+  const supabase = await createClient();
 
   const [{ data: profile }, groups] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username")
+      .select("username, map_emoji")
       .eq("id", user.id)
       .maybeSingle(),
     getMyGroups(supabase, user.id),
@@ -75,6 +75,8 @@ export default async function PostavkePage() {
           </div>
         </div>
       </section>
+
+      <MapEmojiPicker current={profile?.map_emoji ?? null} />
 
       <MojeGrupe groups={grupe} myId={user.id} />
 

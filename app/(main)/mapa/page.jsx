@@ -1,18 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { getCurrentDayStart } from "@/lib/day";
-import { getActiveGroup } from "@/lib/groups";
 import MapClient from "./map-client";
 
 export default async function MapaPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) redirect("/login");
+  const supabase = await createClient();
 
-  const { active } = await getActiveGroup(supabase, user.id);
+  const { active } = await getActiveGroupFor(user.id);
   if (!active) {
     return (
       <main className="flex flex-1 flex-col">
@@ -38,11 +36,11 @@ export default async function MapaPage() {
   const [{ data: profiles }, { data: checkins }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, username, avatar_url, group_members!inner(group_id)")
+      .select("id, username, avatar_url, map_emoji, group_members!inner(group_id)")
       .eq("group_members.group_id", active.id),
     supabase
       .from("checkins")
-      .select("id, user_id, checked_in_at, cancelled_at, photo_url, lat, lng")
+      .select("id, user_id, checked_in_at, cancelled_at, photo_url, thumb_url, lat, lng")
       .eq("group_id", active.id)
       .gte("checked_in_at", dayStart.toISOString())
       .order("checked_in_at", { ascending: true }),

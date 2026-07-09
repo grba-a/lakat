@@ -1,4 +1,5 @@
 import { Anton, Archivo } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import SwRegister from "./sw-register";
 import BootSplash from "./boot-splash";
 import { APPLE_SPLASH } from "@/lib/apple-splash-devices";
@@ -57,6 +58,7 @@ export default function RootLayout({ children }) {
         <BootSplash />
         {children}
         <SwRegister />
+        <Analytics />
       </body>
     </html>
   );
