@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { fetchAllCheckins } from "@/lib/checkins";
 import { getDayKey } from "@/lib/day";
@@ -13,8 +14,10 @@ import {
   nextMonth,
   allTimeStats,
 } from "@/lib/stats";
+import { evaluateBadges } from "@/lib/badges";
 import Avatar from "../avatar";
 import ShameTabs from "./tabs";
+import ShameBadgeToast from "./shame-badge-toast";
 
 const monthFmt = new Intl.DateTimeFormat("hr-HR", {
   month: "long",
@@ -116,6 +119,23 @@ export default async function ShamePage() {
   });
 
   const allTime = allTimeStats({ profiles: allProfiles, daySets, archive, todayKey });
+
+  // Bedževi za "koliko puta pička mjeseca" — nula dodatnih upita, koristi
+  // brojku koju je allTimeStats već izračunao za trenutnog gledatelja
+  let newBadges = [];
+  try {
+    const viewerPickaCount =
+      allTime.pickaLeaders.find((p) => p.id === user.id)?.value ?? 0;
+    newBadges = await evaluateBadges({
+      admin: createAdminClient(),
+      userId: user.id,
+      groupId: active.id,
+      trigger: "shame_visit",
+      context: { pickaCount: viewerPickaCount },
+    });
+  } catch {
+    // ignoriraj: /shame se svejedno mora prikazati
+  }
 
   const monthView = (
     <>
@@ -362,6 +382,7 @@ export default async function ShamePage() {
 
   return (
     <main className="flex flex-1 flex-col">
+      <ShameBadgeToast initialBadges={newBadges} />
       <ShameTabs month={monthView} allTime={allTimeView} />
     </main>
   );

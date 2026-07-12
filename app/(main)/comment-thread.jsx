@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { addComment, deleteComment } from "@/app/actions";
+import BadgeToast from "./badge-toast";
 
 // Komentari se namjerno NE prefetchaju sa slikama — fetch tek kad se
 // lightbox otvori (montira ovu komponentu), da inicijalni load Šanka/
@@ -12,6 +13,7 @@ export default function CommentThread({ checkinId, currentUserId }) {
   const [comments, setComments] = useState(null); // null = još učitava
   const [text, setText] = useState("");
   const [error, setError] = useState(null);
+  const [badgeQueue, setBadgeQueue] = useState([]);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -72,6 +74,10 @@ export default function CommentThread({ checkinId, currentUserId }) {
       if (result?.error) {
         setError(result.error);
         setText(trimmed);
+        return;
+      }
+      if (result?.newBadges?.length) {
+        setBadgeQueue((prev) => [...prev, ...result.newBadges]);
       }
     });
   }
@@ -85,6 +91,12 @@ export default function CommentThread({ checkinId, currentUserId }) {
 
   return (
     <div className="flex w-full max-w-xs flex-col gap-2">
+      <BadgeToast
+        queue={badgeQueue}
+        onDone={(key) =>
+          setBadgeQueue((prev) => prev.filter((b) => b.key !== key))
+        }
+      />
       {comments === null && (
         <p className="text-xs text-muted">Učitavam komentare...</p>
       )}

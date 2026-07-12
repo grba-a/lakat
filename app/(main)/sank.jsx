@@ -10,6 +10,7 @@ import Avatar from "./avatar";
 import PhotoLightbox from "./photo-lightbox";
 import ReactionBar, { toggleReaction } from "./reaction-bar";
 import CommentThread from "./comment-thread";
+import BadgeToast from "./badge-toast";
 
 const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -49,6 +50,7 @@ export default function Sank({
     getCurrentDayStart().toISOString()
   );
   const [error, setError] = useState(null);
+  const [badgeQueue, setBadgeQueue] = useState([]);
   const [askPhoto, setAskPhoto] = useState(false);
   const [lightbox, setLightbox] = useState(null); // { url, caption }
   const [isPending, startTransition] = useTransition();
@@ -251,6 +253,9 @@ export default function Sank({
       });
       return false;
     }
+    if (result?.newBadges?.length) {
+      setBadgeQueue((prev) => [...prev, ...result.newBadges]);
+    }
     return true;
   }
 
@@ -437,6 +442,12 @@ export default function Sank({
 
   return (
     <div className="flex flex-1 flex-col">
+      <BadgeToast
+        queue={badgeQueue}
+        onDone={(key) =>
+          setBadgeQueue((prev) => prev.filter((b) => b.key !== key))
+        }
+      />
       <input
         ref={cameraRef}
         type="file"

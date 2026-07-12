@@ -13,6 +13,7 @@ import {
   najavaPushBody,
   commentPushBody,
 } from "@/lib/push-copy";
+import { evaluateBadges } from "@/lib/badges";
 
 const FOMO_MIN_PRESENT = 3;
 
@@ -107,11 +108,27 @@ export async function checkIn(photoUrl, thumbUrl, coords) {
     return { already: true };
   }
 
+  const checkedInAt = new Date().toISOString();
   const { error } = await supabase
     .from("checkins")
     .insert({ user_id: user.id, group_id: active.id, photo_url, thumb_url, lat, lng });
   if (error) {
     return { error: `Checkin nije prošao: ${error.message}` };
+  }
+
+  // Bedževi — awaita se (toast treba rezultat odmah), ali greška ovdje
+  // ne smije srušiti checkin: default na prazan popis
+  let newBadges = [];
+  try {
+    newBadges = await evaluateBadges({
+      admin: createAdminClient(),
+      userId: user.id,
+      groupId: active.id,
+      trigger: "checkin",
+      context: { checkedInAt },
+    });
+  } catch {
+    // ignoriraj: checkin je prošao, bedževi su bonus
   }
 
   // Push ostalima iz grupe — ne smije srušiti checkin ako slanje pukne
@@ -161,7 +178,7 @@ export async function checkIn(photoUrl, thumbUrl, coords) {
     // ignoriraj: checkin je prošao, obavijesti su best-effort
   }
 
-  return { ok: true };
+  return { ok: true, newBadges };
 }
 
 const REACTION_EMOJI = ["🔥", "🤮", "😂", "🫡", "🍺"];
@@ -265,7 +282,19 @@ export async function addComment(checkinId, text) {
     }
   }
 
-  return { ok: true };
+  let newBadges = [];
+  try {
+    newBadges = await evaluateBadges({
+      admin: createAdminClient(),
+      userId: user.id,
+      groupId: checkin.group_id,
+      trigger: "comment",
+    });
+  } catch {
+    // ignoriraj: komentar je prošao, bedževi su bonus
+  }
+
+  return { ok: true, newBadges };
 }
 
 export async function deleteComment(commentId) {

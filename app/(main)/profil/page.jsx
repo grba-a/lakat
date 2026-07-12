@@ -8,6 +8,7 @@ import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats"
 import Heatmap from "../heatmap";
 import Galerija from "../galerija";
 import AvatarUploader from "./avatar-uploader";
+import BadgesGrid from "./badges-grid";
 
 const dateFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -155,6 +156,8 @@ export default async function ProfilPage() {
       </Link>
 
       <Heatmap daySet={daySet} todayKey={todayKey} />
+
+      {active && <BadgesGrid userId={user.id} groupId={active.id} />}
 
       <Galerija items={photos ?? []} own />
     </main>
