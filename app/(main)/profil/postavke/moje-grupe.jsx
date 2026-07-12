@@ -10,6 +10,7 @@ import {
   changeGroupPassword,
   kickMember,
   makeAdmin,
+  regenerateInviteCode,
 } from "./grupe-actions";
 
 const inputClass =
@@ -46,7 +47,42 @@ function SubmitButton({ isPending, children }) {
   );
 }
 
-// Admin alati jedne grupe: preimenuj, promijeni šifru, članovi
+// Podijeli invite link grupe — native share s clipboard fallbackom.
+// Skriven dok grupa nema kod (deploy prije SQL-a).
+function ShareInviteButton({ inviteCode, groupName }) {
+  const [copied, setCopied] = useState(false);
+
+  if (!inviteCode) return null;
+
+  async function handleShare() {
+    const url = `${window.location.origin}/g/${inviteCode}`;
+    const text = `Upadaj u grupu ${groupName} na Laktu. Šank te čeka.`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ text, url });
+        return;
+      } catch {
+        // korisnik odustao od sharea — ne padaj na clipboard
+        return;
+      }
+    }
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleShare}
+      className="pressable-soft shrink-0 rounded-full border border-accent/25 bg-accent/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-accent"
+    >
+      {copied ? "Kopirano" : "Podijeli link"}
+    </button>
+  );
+}
+
+// Admin alati jedne grupe: preimenuj, promijeni šifru, invite link, članovi
 function AdminTools({ group, myId, onAction }) {
   const [renameState, renameAction, renamePending] = useActionState(
     renameGroup.bind(null, group.id),
@@ -57,9 +93,37 @@ function AdminTools({ group, myId, onAction }) {
     null
   );
   const [confirmKick, setConfirmKick] = useState(null);
+  const [confirmRegen, setConfirmRegen] = useState(false);
 
   return (
     <div className="flex flex-col gap-4 px-4 pb-4">
+      {group.inviteCode && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex flex-col">
+            <span className="text-xs font-bold uppercase tracking-widest text-muted">
+              Invite link
+            </span>
+            <span className="text-xs text-muted">
+              Tko klikne, upada bez šifre.
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              if (confirmRegen) {
+                setConfirmRegen(false);
+                onAction(() => regenerateInviteCode(group.id));
+              } else {
+                setConfirmRegen(true);
+              }
+            }}
+            className="pressable-soft shrink-0 rounded-full border border-danger/30 bg-danger/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-danger"
+          >
+            {confirmRegen ? "Sigurno?" : "Poništi link"}
+          </button>
+        </div>
+      )}
+
       <form action={renameAction} className="flex flex-col gap-3">
         <label className="flex flex-col gap-2">
           <span className="text-xs font-bold uppercase tracking-widest text-muted">
@@ -180,20 +244,26 @@ function GroupCard({ group, myId, onAction }) {
             {group.members.length === 1 ? "član" : "člana"}
           </span>
         </span>
-        <button
-          type="button"
-          onClick={() => {
-            if (confirmLeave) {
-              setConfirmLeave(false);
-              onAction(() => leaveGroup(group.id));
-            } else {
-              setConfirmLeave(true);
-            }
-          }}
-          className="pressable-soft shrink-0 rounded-full border border-danger/30 bg-danger/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-danger"
-        >
-          {confirmLeave ? "Sigurno?" : "Napusti"}
-        </button>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <ShareInviteButton
+            inviteCode={group.inviteCode}
+            groupName={group.name}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (confirmLeave) {
+                setConfirmLeave(false);
+                onAction(() => leaveGroup(group.id));
+              } else {
+                setConfirmLeave(true);
+              }
+            }}
+            className="pressable-soft shrink-0 rounded-full border border-danger/30 bg-danger/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-danger"
+          >
+            {confirmLeave ? "Sigurno?" : "Napusti"}
+          </button>
+        </span>
       </div>
 
       {group.role === "admin" && (

@@ -7,7 +7,12 @@ export async function proxy(request) {
   const isAuthPage = pathname === "/login" || pathname === "/register";
   // /welcome je javna QR landing stranica — svi je vide, ulogirani se ne
   // bacaju s nje (netko tko skenira QR može već imati račun).
-  const isPublicPage = pathname === "/welcome";
+  // /zaboravio-lozinku i /auth/confirm su javni za reset lozinke;
+  // /reset-lozinka NIJE javna — traži (recovery) sesiju iz maila.
+  const isPublicPage =
+    pathname === "/welcome" ||
+    pathname === "/zaboravio-lozinku" ||
+    pathname.startsWith("/auth/confirm");
 
   if (!user && !isAuthPage && !isPublicPage) {
     // ?next= čuva kamo je korisnik htio (npr. /f/KOD share link) da ga

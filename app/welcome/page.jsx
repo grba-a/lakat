@@ -184,6 +184,30 @@ export default function WelcomePage() {
         </ol>
       </section>
 
+      {/* Za osnivače ekipa */}
+      <section className="mt-20">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-accent">
+          <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
+          Imaš svoju ekipu?
+        </h2>
+        <div className="glass mt-5 rounded-card px-5 py-8">
+          <p className="font-display text-4xl uppercase leading-none tracking-tight">
+            Osnuj grupu<span className="text-accent">.</span>
+          </p>
+          <p className="mt-4 text-lg leading-relaxed text-muted">
+            Ti si taj koji uvijek piše „di ste"? Osnuj grupu za svoju ekipu,
+            pozovi ih jednim linkom i neka statistika sudi tko je legenda, a tko
+            pička mjeseca.
+          </p>
+          <Link
+            href="/register"
+            className="pressable-soft mt-6 flex h-16 w-full items-center justify-center rounded-button border border-accent/40 bg-accent/10 font-display text-2xl uppercase tracking-wide text-accent"
+          >
+            Osnuj grupu za ekipu
+          </Link>
+        </div>
+      </section>
+
       {/* Fore */}
       <section className="mt-20">
         <h2 className="text-xs font-bold uppercase tracking-widest text-accent">

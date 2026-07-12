@@ -94,6 +94,86 @@ export async function joinBeta() {
   return { ok: true, message: "Upao si u betu. Dobrodošao u ludnicu." };
 }
 
+// Ulazak preko invite linka (/g/KOD) — kod JE vjerodajnica, pa se rješava
+// isključivo kroz admin klijent i nikad ne izlaže anon klijentu.
+export async function joinByInvite(code) {
+  const user = await requireUser();
+  const normalized = code?.toString().trim().toUpperCase();
+  if (!normalized) {
+    return { error: "Nema koda, nema ulaska." };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: group } = await admin
+    .from("groups")
+    .select("id, name")
+    .eq("invite_code", normalized)
+    .maybeSingle();
+  if (!group) {
+    return { error: "Taj link više ne vrijedi. Traži ekipu novi." };
+  }
+
+  const { count } = await admin
+    .from("group_members")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  if ((count ?? 0) >= MAX_GRUPA) {
+    return { error: "Tri grupe su ti malo? Alkoholičaru." };
+  }
+
+  const existing = await membershipOf(admin, group.id, user.id);
+  if (existing) {
+    return { error: "Već si u toj grupi, koliko si popio?" };
+  }
+
+  const { error } = await admin
+    .from("group_members")
+    .insert({ group_id: group.id, user_id: user.id, role: "member" });
+  if (error) {
+    return { error: `Upis nije prošao: ${error.message}` };
+  }
+
+  await admin
+    .from("profiles")
+    .update({ active_group_id: group.id })
+    .eq("id", user.id);
+
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Upao si. Novi šank, ista jetra." };
+}
+
+// Poništi stari link i izdaj novi kod — samo admin grupe
+export async function regenerateInviteCode(groupId) {
+  const user = await requireUser();
+  const admin = createAdminClient();
+
+  const me = await membershipOf(admin, groupId, user.id);
+  if (me?.role !== "admin") {
+    return { error: "Nisi admin ove grupe. Lijepo probaj." };
+  }
+
+  const CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  for (let attempt = 0; attempt < 5; attempt++) {
+    let candidate = "";
+    const bytes = crypto.getRandomValues(new Uint8Array(8));
+    for (const b of bytes) candidate += CHARSET[b % CHARSET.length];
+
+    const { error } = await admin
+      .from("groups")
+      .update({ invite_code: candidate })
+      .eq("id", groupId);
+    if (!error) {
+      revalidatePath("/profil/postavke");
+      return { ok: true, message: "Stari link je mrtav. Podijeli novi." };
+    }
+    if (error.code !== "23505") {
+      return { error: `Nije prošlo: ${error.message}` };
+    }
+  }
+  return { error: "Nije prošlo, probaj opet." };
+}
+
 export async function joinGroup(prevState, formData) {
   const user = await requireUser();
   const groupName = formData.get("groupName")?.toString().trim();

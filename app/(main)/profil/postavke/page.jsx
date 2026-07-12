@@ -26,16 +26,24 @@ export default async function PostavkePage() {
 
   // Članovi svih mojih grupa u jednom upitu (RLS pušta samo vlastite grupe)
   const groupIds = groups.map((g) => g.id);
-  const { data: memberRows } = groupIds.length
-    ? await supabase
-        .from("group_members")
-        .select("group_id, user_id, role, profiles(username)")
-        .in("group_id", groupIds)
-        .order("joined_at", { ascending: true })
-    : { data: [] };
+  const [{ data: memberRows }, { data: codeRows }] = groupIds.length
+    ? await Promise.all([
+        supabase
+          .from("group_members")
+          .select("group_id, user_id, role, profiles(username)")
+          .in("group_id", groupIds)
+          .order("joined_at", { ascending: true }),
+        supabase
+          .from("groups")
+          .select("id, invite_code")
+          .in("id", groupIds),
+      ])
+    : [{ data: [] }, { data: [] }];
 
   const grupe = groups.map((g) => ({
     ...g,
+    inviteCode:
+      (codeRows ?? []).find((c) => c.id === g.id)?.invite_code ?? null,
     members: (memberRows ?? [])
       .filter((m) => m.group_id === g.id)
       .map((m) => ({
