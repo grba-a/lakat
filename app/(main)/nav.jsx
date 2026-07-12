@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+
+const TOP_OFFSET = 24;
+const DELTA_THRESHOLD = 8;
 
 // Linijske ikone (Lucide paths): transparentne, crtane stroke-om u brand
 // zelenoj — aktivna puna, neaktivne prigušene
@@ -47,13 +51,47 @@ const TABS = [
 
 export default function Nav() {
   const pathname = usePathname();
+  const [compact, setCompact] = useState(false);
+  const lastY = useRef(0);
+  const rafId = useRef(null);
+
+  useEffect(() => {
+    lastY.current = window.scrollY;
+
+    function onScroll() {
+      if (rafId.current !== null) return;
+      rafId.current = requestAnimationFrame(() => {
+        rafId.current = null;
+        const y = Math.max(0, window.scrollY);
+        if (y < TOP_OFFSET) {
+          setCompact(false);
+          lastY.current = y;
+          return;
+        }
+        const delta = y - lastY.current;
+        if (Math.abs(delta) < DELTA_THRESHOLD) return;
+        setCompact(delta > 0);
+        lastY.current = y;
+      });
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (rafId.current !== null) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
 
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-40 px-5 pb-[max(env(safe-area-inset-bottom),0.75rem)]"
       style={{ viewTransitionName: "tab-bar" }}
     >
-      <div className="glass-nav mx-auto flex w-full max-w-sm rounded-full p-1.5">
+      <div
+        className={`glass-nav mx-auto flex w-full max-w-sm origin-bottom rounded-full p-1.5 transition-[transform,opacity] duration-[220ms] ease-[var(--ease-fluid)] ${
+          compact ? "scale-90 opacity-90" : "scale-100 opacity-100"
+        }`}
+      >
         {TABS.map((tab) => {
           const active = pathname === tab.href;
           return (
