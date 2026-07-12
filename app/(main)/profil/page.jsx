@@ -72,7 +72,7 @@ export default async function ProfilPage() {
 
   const stats = [
     { value: total, label: "dolazaka" },
-    { value: `${pct}%`, label: "od registracije" },
+    { value: `${pct}%`, label: "dolaznost" },
     { value: current, label: "streak sad" },
     { value: longest, label: "najduži streak" },
   ];

@@ -16,6 +16,8 @@ export default function PhotoLightbox({ url, caption, onClose, children }) {
       <img
         src={url}
         alt={caption || ""}
+        decoding="async"
+        fetchPriority="high"
         className="max-h-[70dvh] w-auto max-w-full rounded-card border border-white/10 object-contain shadow-float"
       />
       {caption && (

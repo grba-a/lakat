@@ -11,6 +11,8 @@ export default function Avatar({ username, avatarUrl, size = 32, className = "" 
         alt=""
         width={size}
         height={size}
+        loading="lazy"
+        decoding="async"
         style={style}
         className={`shrink-0 rounded-full border border-white/10 object-cover ${className}`}
       />
