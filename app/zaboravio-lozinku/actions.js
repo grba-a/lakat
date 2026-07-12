@@ -9,7 +9,9 @@ export async function requestReset(prevState, formData) {
   }
 
   const supabase = await createClient();
-  await supabase.auth.resetPasswordForEmail(email);
+  await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: "https://laktarenje.com/reset-lozinka",
+  });
 
   // Uvijek ista poruka — ne odajemo postoji li email u bazi
   return {

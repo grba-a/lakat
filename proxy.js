@@ -7,12 +7,14 @@ export async function proxy(request) {
   const isAuthPage = pathname === "/login" || pathname === "/register";
   // /welcome je javna QR landing stranica — svi je vide, ulogirani se ne
   // bacaju s nje (netko tko skenira QR može već imati račun).
-  // /zaboravio-lozinku i /auth/confirm su javni za reset lozinke;
-  // /reset-lozinka NIJE javna — traži (recovery) sesiju iz maila.
+  // /zaboravio-lozinku i /reset-lozinka su javni za reset lozinke —
+  // recovery sesija iz maila stiže kao URL hash koji proxy (server-side)
+  // ne vidi, pa /reset-lozinka MORA biti javna da je klijentski JS uopće
+  // stigne obraditi (supabase-js hvata #access_token= na mountu).
   const isPublicPage =
     pathname === "/welcome" ||
     pathname === "/zaboravio-lozinku" ||
-    pathname.startsWith("/auth/confirm");
+    pathname === "/reset-lozinka";
 
   if (!user && !isAuthPage && !isPublicPage) {
     // ?next= čuva kamo je korisnik htio (npr. /f/KOD share link) da ga
