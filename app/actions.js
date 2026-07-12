@@ -3,9 +3,12 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentDayStart } from "@/lib/day";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentDayStart, getDayKey } from "@/lib/day";
 import { getActiveGroup, getMyGroups } from "@/lib/groups";
 import { notifyGroup } from "@/lib/push";
+
+const FOMO_MIN_PRESENT = 3;
 
 export async function logout() {
   const supabase = await createClient();
@@ -118,6 +121,36 @@ export async function checkIn(photoUrl, thumbUrl, coords) {
       senderId: user.id,
       body: `${profile?.username ?? "Netko"} je za šankom. Miči guzicu.`,
     });
+
+    // FOMO: kad treći različiti član danas dođe, pingaj one koji fale —
+    // jednom po danu po grupi (fomo_day claim spriječi dupli ping kod
+    // ponovnog check-ina nakon poništenja i race dva istovremena checkina)
+    const { data: todays } = await supabase
+      .from("checkins")
+      .select("user_id")
+      .eq("group_id", active.id)
+      .is("cancelled_at", null)
+      .gte("checked_in_at", dayStart.toISOString());
+    const present = [...new Set((todays ?? []).map((t) => t.user_id))];
+    if (present.length >= FOMO_MIN_PRESENT) {
+      const todayKey = getDayKey(new Date());
+      const admin = createAdminClient();
+      const { data: claimed } = await admin
+        .from("groups")
+        .update({ fomo_day: todayKey })
+        .eq("id", active.id)
+        .or(`fomo_day.is.null,fomo_day.neq.${todayKey}`)
+        .select("id");
+      if (claimed?.length) {
+        await notifyGroup({
+          groupId: active.id,
+          groupName: active.name,
+          senderId: user.id,
+          excludeIds: present,
+          body: `Šank se puni (${present.length} ih je). Di si ti?`,
+        });
+      }
+    }
   } catch {
     // ignoriraj: checkin je prošao, obavijesti su best-effort
   }

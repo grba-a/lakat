@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/prazan-sank",
       "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/cron/streak-visi",
+      "schedule": "0 18 * * *"
     }
   ]
 }
