@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getDayKey } from "@/lib/day";
 import { computeStreaks } from "@/lib/stats";
 import { notifyUser } from "@/lib/push";
+import { streakVisiPushBody } from "@/lib/push-copy";
 
 const LOOKBACK_DAYS = 40; // pokriva i "Vlasnik stolice" prag (30) s marginom
 const MIN_STREAK_AT_RISK = 3; // isti prag kao "U formi" titula
@@ -55,7 +56,7 @@ export async function GET(request) {
     [...atRisk].map(([userId, streak]) =>
       notifyUser({
         userId,
-        body: `Streak od ${streak} dana ti visi o koncu. Miči guzicu za šank.`,
+        body: streakVisiPushBody(streak),
       })
     )
   );

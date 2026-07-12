@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentDayStart, getDayKey } from "@/lib/day";
 import { getActiveGroup, getMyGroups } from "@/lib/groups";
 import { notifyGroup } from "@/lib/push";
+import { checkinPushBody, fomoPushBody, najavaPushBody } from "@/lib/push-copy";
 
 const FOMO_MIN_PRESENT = 3;
 
@@ -119,7 +120,7 @@ export async function checkIn(photoUrl, thumbUrl, coords) {
       groupId: active.id,
       groupName: active.name,
       senderId: user.id,
-      body: `${profile?.username ?? "Netko"} je za šankom. Miči guzicu.`,
+      body: checkinPushBody(profile?.username ?? "Netko"),
     });
 
     // FOMO: kad treći različiti član danas dođe, pingaj one koji fale —
@@ -147,7 +148,7 @@ export async function checkIn(photoUrl, thumbUrl, coords) {
           groupName: active.name,
           senderId: user.id,
           excludeIds: present,
-          body: `Šank se puni (${present.length} ih je). Di si ti?`,
+          body: fomoPushBody(present.length),
         });
       }
     }
@@ -263,7 +264,7 @@ export async function najaviDolazak() {
       groupId: grupa.id,
       groupName: grupa.name,
       senderId: user.id,
-      body: `${profile?.username ?? "Netko"} kreće prema šanku. (Laže, kasnit će pola sata, klasika.)`,
+      body: najavaPushBody(profile?.username ?? "Netko"),
     });
   } catch {
     // najava je prošla, push je best-effort

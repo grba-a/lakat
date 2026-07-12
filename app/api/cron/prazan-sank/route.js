@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentDayStart } from "@/lib/day";
 import { notifyGroup } from "@/lib/push";
+import { praznaSankPushBody } from "@/lib/push-copy";
 
 // Vercel cron: 19:00 UTC = 21:00 po Zagrebu LJETI (zimi 20:00 — cron ne zna
 // za DST; ako zasmeta, promijeni schedule u vercel.json na "0 20 * * *").
@@ -40,7 +41,7 @@ export async function GET(request) {
       notifyGroup({
         groupId: g.id,
         groupName: g.name,
-        body: "21 je sati, a šank zjapi prazan. Sram vas bilo, pičke.",
+        body: praznaSankPushBody(),
       })
     )
   );
