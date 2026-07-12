@@ -144,6 +144,16 @@ export default async function ProfilPage() {
 
       <p className="mt-6 text-sm text-muted">{comment(pct)}</p>
 
+      <Link
+        href="/profil/wrapped"
+        className="glass pressable-soft mt-6 flex items-center justify-between gap-3 rounded-card px-5 py-4"
+      >
+        <span className="font-display text-xl uppercase leading-none tracking-wide">
+          Lakat Wrapped<span className="text-accent">.</span>
+        </span>
+        <span className="shrink-0 text-2xl text-accent">→</span>
+      </Link>
+
       <Heatmap daySet={daySet} todayKey={todayKey} />
 
       <Galerija items={photos ?? []} own />

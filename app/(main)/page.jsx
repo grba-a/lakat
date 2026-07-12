@@ -11,12 +11,15 @@ import {
   monthRanking,
   worstOf,
   monthOf,
+  previousMonth,
+  lastDayOfMonth,
 } from "@/lib/stats";
 import Sank from "./sank";
 import Memorije from "./memorije";
 import Flashbacks from "./flashbacks";
 import InstallHint from "./install-hint";
 import JoinGroupCard from "./join-group-card";
+import WrappedBanner from "./wrapped-banner";
 
 // Prozor za statistiku na Home: zadnjih 60 dana pokriva tekući mjesec (rang)
 // + streak titule (prag je 30 dana), a ne skenira cijelu povijest grupe.
@@ -123,6 +126,18 @@ export default async function Home() {
     .sort((a, b) => new Date(b.checked_in_at) - new Date(a.checked_in_at))
     .map((m) => ({ ...m, username: usernames[m.user_id] ?? "Netko" }));
 
+  // Wrapped banner: zadnja 3 dana tekućeg mjeseca (recap koji se puni) ili
+  // prva 3 dana idućeg (recap prošlog, netom zaključenog mjeseca)
+  const currentMonthKey = monthOf(todayKey);
+  const lastDayNum = Number(lastDayOfMonth(currentMonthKey).slice(8, 10));
+  const dayNum = Number(todayKey.slice(8, 10));
+  const wrappedMonthKey =
+    dayNum <= 3
+      ? previousMonth(currentMonthKey)
+      : dayNum >= lastDayNum - 2
+        ? currentMonthKey
+        : null;
+
   return (
     <main className="flex flex-1 flex-col">
       <Sank
@@ -135,6 +150,7 @@ export default async function Home() {
         initialNajave={najave ?? []}
         initialReactions={reactionsByCheckin}
       />
+      {wrappedMonthKey && <WrappedBanner monthKey={wrappedMonthKey} />}
       <Memorije
         key={`memorije-${active.id}`}
         items={memoryItems}
