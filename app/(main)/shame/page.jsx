@@ -11,8 +11,10 @@ import {
   bestOf,
   monthOf,
   nextMonth,
+  allTimeStats,
 } from "@/lib/stats";
 import Avatar from "../avatar";
+import ShameTabs from "./tabs";
 
 const monthFmt = new Intl.DateTimeFormat("hr-HR", {
   month: "long",
@@ -113,8 +115,10 @@ export default async function ShamePage() {
     };
   });
 
-  return (
-    <main className="flex flex-1 flex-col">
+  const allTime = allTimeStats({ profiles: allProfiles, daySets, archive, todayKey });
+
+  const monthView = (
+    <>
       <section className="mt-8">
         <h1 className="text-xs font-bold uppercase tracking-widest text-danger">
           Pička mjeseca (zasad)
@@ -247,6 +251,118 @@ export default async function ShamePage() {
           </ul>
         )}
       </section>
+    </>
+  );
+
+  const allTimeView = (
+    <>
+      <section className="mt-8">
+        <h1 className="text-xs font-bold uppercase tracking-widest text-accent">
+          Rekorder
+        </h1>
+        {allTime.streakLeaders.length === 0 || allTime.streakLeaders[0].value === 0 ? (
+          <p className="mt-4 text-sm text-muted">
+            Nitko još nema streak vrijedan spomena.
+          </p>
+        ) : (
+          <div className="mt-3 rounded-card border border-accent/30 bg-accent/10 px-5 py-5 shadow-glow">
+            <p className="font-display text-4xl uppercase leading-none tracking-tight text-accent">
+              {allTime.streakLeaders
+                .filter((l) => l.value === allTime.streakLeaders[0].value)
+                .map((l) => l.username)
+                .join(" & ")}
+            </p>
+            <p className="mt-2 text-sm text-muted">
+              Najdulji streak ikad:{" "}
+              <span className="font-bold text-accent">
+                {allTime.streakLeaders[0].value} dana
+              </span>
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className="mt-10">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
+          Ukupno dolazaka svih vremena
+        </h2>
+        {allTime.attendanceLeaders.every((l) => l.value === 0) ? (
+          <p className="mt-4 text-sm text-muted">Još nema dolazaka. Sve tek počinje.</p>
+        ) : (
+          <ul className="stagger mt-4 flex flex-col gap-2">
+            {allTime.attendanceLeaders.map((entry, i) => (
+              <li
+                key={entry.id}
+                className="surface-2 pressable-soft rounded-row"
+                style={{ "--stagger-i": Math.min(i, 8) }}
+              >
+                <Link
+                  href={entry.id === user.id ? "/profil" : `/korisnik/${entry.id}`}
+                  className="flex h-14 items-center justify-between px-4"
+                >
+                  <span className="flex items-center gap-3 font-bold">
+                    <span className="w-5 text-sm text-muted">{i + 1}.</span>
+                    <Avatar
+                      username={entry.username}
+                      avatarUrl={entry.avatar_url}
+                      size={32}
+                    />
+                    {entry.username}
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-muted">
+                    {entry.value} dolazaka
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-10">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-danger">
+          Koliko puta pička mjeseca
+        </h2>
+        {allTime.pickaLeaders.length === 0 ? (
+          <p className="mt-4 text-sm text-muted">
+            Nitko još nije okrunjen. Arhiva je prazna ili prekratka.
+          </p>
+        ) : (
+          <ul className="stagger mt-4 flex flex-col gap-2">
+            {allTime.pickaLeaders.map((entry, i) => (
+              <li
+                key={entry.id}
+                className="surface-2 pressable-soft rounded-row border-danger/30 bg-danger/[0.08]"
+                style={{ "--stagger-i": Math.min(i, 8) }}
+              >
+                <Link
+                  href={entry.id === user.id ? "/profil" : `/korisnik/${entry.id}`}
+                  className="flex h-14 items-center justify-between px-4"
+                >
+                  <span className="flex items-center gap-3 font-bold">
+                    <Avatar
+                      username={entry.username}
+                      avatarUrl={entry.avatar_url}
+                      size={32}
+                      className="border-danger/40"
+                    />
+                    {entry.username}
+                  </span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-danger">
+                    {entry.value}×
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </>
+  );
+
+  return (
+    <main className="flex flex-1 flex-col">
+      <ShameTabs month={monthView} allTime={allTimeView} />
     </main>
   );
 }
