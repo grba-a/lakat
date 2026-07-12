@@ -9,6 +9,7 @@ import { checkIn, cancelCheckIn, najaviDolazak, react } from "@/app/actions";
 import Avatar from "./avatar";
 import PhotoLightbox from "./photo-lightbox";
 import ReactionBar, { toggleReaction } from "./reaction-bar";
+import CommentThread from "./comment-thread";
 
 const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -678,11 +679,17 @@ export default function Sank({
         onClose={() => setLightbox(null)}
       >
         {lightbox?.checkinId && (
-          <ReactionBar
-            rows={reactions[lightbox.checkinId] ?? []}
-            myId={currentUserId}
-            onToggle={(emoji) => handleReaction(lightbox.checkinId, emoji)}
-          />
+          <div className="flex flex-col items-center gap-4">
+            <ReactionBar
+              rows={reactions[lightbox.checkinId] ?? []}
+              myId={currentUserId}
+              onToggle={(emoji) => handleReaction(lightbox.checkinId, emoji)}
+            />
+            <CommentThread
+              checkinId={lightbox.checkinId}
+              currentUserId={currentUserId}
+            />
+          </div>
         )}
       </PhotoLightbox>
     </div>

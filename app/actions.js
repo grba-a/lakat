@@ -6,8 +6,13 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentDayStart, getDayKey } from "@/lib/day";
 import { getActiveGroup, getMyGroups } from "@/lib/groups";
-import { notifyGroup } from "@/lib/push";
-import { checkinPushBody, fomoPushBody, najavaPushBody } from "@/lib/push-copy";
+import { notifyGroup, notifyUser } from "@/lib/push";
+import {
+  checkinPushBody,
+  fomoPushBody,
+  najavaPushBody,
+  commentPushBody,
+} from "@/lib/push-copy";
 
 const FOMO_MIN_PRESENT = 3;
 
@@ -202,6 +207,79 @@ export async function react(checkinId, emoji) {
       { checkin_id: checkinId, user_id: user.id, group_id: checkin.group_id, emoji },
       { onConflict: "checkin_id,user_id" }
     );
+  if (error) return { error: `Nije prošlo: ${error.message}` };
+  return { ok: true };
+}
+
+const COMMENT_MAX_LEN = 200;
+
+// Komentar na check-in — jedan redak, samo autor briše
+export async function addComment(checkinId, text) {
+  const trimmed = text?.toString().trim() ?? "";
+  if (!trimmed) {
+    return { error: "Prazan komentar? Ma daj." };
+  }
+  if (trimmed.length > COMMENT_MAX_LEN) {
+    return { error: `Malo si se raspisao. Max ${COMMENT_MAX_LEN} znakova.` };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { data: checkin } = await supabase
+    .from("checkins")
+    .select("group_id, user_id")
+    .eq("id", checkinId)
+    .maybeSingle();
+  if (!checkin) {
+    return { error: "Ta slika ne postoji ili nije iz tvoje grupe." };
+  }
+
+  const { error } = await supabase
+    .from("comments")
+    .insert({
+      checkin_id: checkinId,
+      user_id: user.id,
+      group_id: checkin.group_id,
+      text: trimmed,
+    });
+  if (error) return { error: `Nije prošlo: ${error.message}` };
+
+  // Push vlasniku check-ina — ne sebi, i ne smije srušiti komentar ako pukne
+  if (checkin.user_id !== user.id) {
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", user.id)
+        .maybeSingle();
+      await notifyUser({
+        userId: checkin.user_id,
+        body: commentPushBody(profile?.username ?? "Netko", trimmed),
+      });
+    } catch {
+      // best-effort
+    }
+  }
+
+  return { ok: true };
+}
+
+export async function deleteComment(commentId) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { error } = await supabase
+    .from("comments")
+    .delete()
+    .eq("id", commentId)
+    .eq("user_id", user.id);
   if (error) return { error: `Nije prošlo: ${error.message}` };
   return { ok: true };
 }
