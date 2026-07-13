@@ -557,8 +557,9 @@ export async function undoLastDrink() {
   return { ok: true };
 }
 
-// Kolo pića — rezultat bira ISKLJUČIVO server (anti-cheat); strogo 1 spin
-// po večeri, nema žalbe
+// Kolo pića ("Piće dana") — rezultat bira ISKLJUČIVO server (anti-cheat);
+// strogo 1 spin dnevno PO KORISNIKU (bez obzira na grupu), bez check-in
+// uvjeta — ikona živi u headeru i vrti se i prije dolaska
 export async function spinKolo() {
   const supabase = await createClient();
   const {
@@ -573,23 +574,10 @@ export async function spinKolo() {
 
   const dayStart = getCurrentDayStart();
 
-  const { data: activeCheckin } = await supabase
-    .from("checkins")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("group_id", active.id)
-    .is("cancelled_at", null)
-    .gte("checked_in_at", dayStart.toISOString())
-    .limit(1);
-  if (!activeCheckin?.length) {
-    return { error: "Prvo se checkiraj, pa onda vrti kolo." };
-  }
-
   const { data: already } = await supabase
     .from("kolo_spins")
     .select("id, result")
     .eq("user_id", user.id)
-    .eq("group_id", active.id)
     .gte("created_at", dayStart.toISOString())
     .limit(1);
   if (already?.length) {

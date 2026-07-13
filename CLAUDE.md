@@ -45,7 +45,7 @@ Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `s
 - `najave`: "stižem" najave dolaska
 - `push_subscriptions`: user_id, subscription (jsonb), created_at
 - `drinks`: beer log — id, user_id, group_id, drink_type, logged_at. Redni broj pića se ne sprema, derivira se brojanjem redova po lakat-danu.
-- `kolo_spins`: kolo pića — id, user_id, group_id, result, created_at. Rezultat bira ISKLJUČIVO server (spinKolo akcija), nema client insert policyja. Max 1 spin po lakat-danu, provjereno server-side.
+- `kolo_spins`: kolo "Piće dana" — id, user_id, group_id, result, created_at. Rezultat bira ISKLJUČIVO server (spinKolo akcija), nema client insert policyja. Max 1 spin po lakat-danu PO KORISNIKU (bez obzira na grupu), bez check-in uvjeta; ikona u headeru (kolo-icon.jsx) nestaje nakon spina do 06:00.
 
 RLS je uključen i grupno-scopan (`is_member(group_id)`, `shares_group_with(id)` helper funkcije). Sva pisanja u `groups`/`group_members` idu isključivo kroz service-role admin klijent (`lib/supabase/admin.js`), nema client insert/update policyja na tim tablicama.
 

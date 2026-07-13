@@ -2,11 +2,13 @@ import { ViewTransition } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { countActiveFriends } from "@/lib/friends";
+import { getCurrentDayStart } from "@/lib/day";
 import Nav from "./nav";
 import OfflineBanner from "./offline-banner";
 import PresenceHeartbeat from "./presence-heartbeat";
 import GroupSwitcher from "./group-switcher";
 import FriendsBadge from "./friends-badge";
+import KoloIcon from "./kolo-icon";
 
 export default async function MainLayout({ children }) {
   const user = await getUser();
@@ -14,15 +16,24 @@ export default async function MainLayout({ children }) {
   let active = null;
   let groups = [];
   let activeFriends = 0;
+  let koloSpun = false;
   if (user) {
     const supabase = await createClient();
-    const [groupData, friends] = await Promise.all([
+    const [groupData, friends, { data: todaysSpin }] = await Promise.all([
       getActiveGroupFor(user.id),
       countActiveFriends(supabase, user.id),
+      // Piće dana: 1 spin dnevno po korisniku, bez obzira na grupu
+      supabase
+        .from("kolo_spins")
+        .select("id")
+        .eq("user_id", user.id)
+        .gte("created_at", getCurrentDayStart().toISOString())
+        .limit(1),
     ]);
     active = groupData.active;
     groups = groupData.groups;
     activeFriends = friends;
+    koloSpun = Boolean(todaysSpin?.length);
   }
 
   return (
@@ -43,7 +54,8 @@ export default async function MainLayout({ children }) {
             <GroupSwitcher groups={groups} activeId={active.id} />
           )}
         </div>
-        <div className="flex flex-1 justify-end">
+        <div className="flex flex-1 items-center justify-end gap-1.5">
+          {active && <KoloIcon initialSpun={koloSpun} />}
           <FriendsBadge initialCount={activeFriends} />
         </div>
       </header>

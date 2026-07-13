@@ -12,7 +12,6 @@ import {
   react,
   logDrink,
   undoLastDrink,
-  spinKolo,
 } from "@/app/actions";
 import Avatar from "./avatar";
 import PhotoLightbox from "./photo-lightbox";
@@ -20,7 +19,6 @@ import ReactionBar, { toggleReaction } from "./reaction-bar";
 import CommentThread from "./comment-thread";
 import BadgeToast from "./badge-toast";
 import DrinkBar from "./drink-bar";
-import KoloPica from "./kolo-pica";
 import { drinkInfo } from "@/lib/drinks";
 
 const timeFmt = new Intl.DateTimeFormat("hr-HR", {
@@ -537,11 +535,6 @@ export default function Sank({
     });
   }
 
-  // Rezultat bira server; KoloPica sama animira kolo na taj rezultat
-  async function handleSpin() {
-    return spinKolo();
-  }
-
   function profileHref(id) {
     return id === currentUserId ? "/profil" : `/korisnik/${id}`;
   }
@@ -612,16 +605,13 @@ export default function Sank({
       )}
 
       {iAmPresent && (
-        <>
-          <DrinkBar
-            tonightCount={myTonightDrinkCount}
-            mySpinDrink={mySpinDrink}
-            onLog={handleLogDrink}
-            onUndo={handleUndoDrink}
-            disabled={isPending}
-          />
-          <KoloPica mySpinDrink={mySpinDrink} onSpin={handleSpin} disabled={isPending} />
-        </>
+        <DrinkBar
+          tonightCount={myTonightDrinkCount}
+          mySpinDrink={mySpinDrink}
+          onLog={handleLogDrink}
+          onUndo={handleUndoDrink}
+          disabled={isPending}
+        />
       )}
 
       {!iAmPresent && (
