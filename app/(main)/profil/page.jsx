@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { fetchAllCheckins } from "@/lib/checkins";
-import { getDayKey } from "@/lib/day";
-import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
+import { getCurrentDayStart, getDayKey } from "@/lib/day";
+import { userDaySets, computeStreaks, daysBetween, titleFor, monthOf } from "@/lib/stats";
+import { fetchAllDrinks, favoriteDrink } from "@/lib/drinks";
 import Heatmap from "../heatmap";
 import Galerija from "../galerija";
 import AvatarUploader from "./avatar-uploader";
@@ -24,6 +25,13 @@ function comment(pct) {
   return "Sramota. Titula pičke mjeseca ti maše iz daljine.";
 }
 
+function drinkComment(total) {
+  if (total >= 100) return "Jetra ti je službeno dala otkaz.";
+  if (total >= 50) return "Poluvrijeme, a već si legenda.";
+  if (total > 0) return "Skromno, ali časno.";
+  return "Trijezan kao suza. Za sada.";
+}
+
 export default async function ProfilPage() {
   const user = await getUser();
   if (!user) redirect("/login");
@@ -32,7 +40,7 @@ export default async function ProfilPage() {
   // Sve na profilu (statistika, heatmap, galerija) živi u aktivnoj grupi
   const { active } = await getActiveGroupFor(user.id);
 
-  const [{ data: profile }, checkins, { data: photos }, { data: membership }] =
+  const [{ data: profile }, checkins, { data: photos }, { data: membership }, drinkRows] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -56,6 +64,7 @@ export default async function ProfilPage() {
             .eq("user_id", user.id)
             .maybeSingle()
         : Promise.resolve({ data: null }),
+      fetchAllDrinks(supabase, user.id, active?.id),
     ]);
 
   const daySet = userDaySets(checkins).get(user.id) ?? new Set();
@@ -76,6 +85,22 @@ export default async function ProfilPage() {
     { value: `${pct}%`, label: "dolaznost" },
     { value: current, label: "streak sad" },
     { value: longest, label: "najduži streak" },
+  ];
+
+  const dayStartIso = getCurrentDayStart().toISOString();
+  const currentMonthKey = monthOf(todayKey);
+  const tonightDrinks = drinkRows.filter((d) => d.logged_at >= dayStartIso).length;
+  const monthDrinks = drinkRows.filter(
+    (d) => monthOf(getDayKey(d.logged_at)) === currentMonthKey
+  ).length;
+  const allTimeDrinks = drinkRows.length;
+  const favDrink = favoriteDrink(drinkRows);
+
+  const drinkStats = [
+    { value: tonightDrinks, label: "večeras" },
+    { value: monthDrinks, label: "ovaj mjesec" },
+    { value: allTimeDrinks, label: "ukupno" },
+    { value: favDrink ? `${favDrink.emoji} ${favDrink.label}` : "—", label: "omiljeno piće" },
   ];
 
   return (
@@ -144,6 +169,27 @@ export default async function ProfilPage() {
       </section>
 
       <p className="mt-6 text-sm text-muted">{comment(pct)}</p>
+
+      <h2 className="mt-10 text-xs font-bold uppercase tracking-widest text-muted">
+        Pijanstvo
+      </h2>
+      <section className="stagger mt-4 grid grid-cols-2 gap-3">
+        {drinkStats.map((stat, i) => (
+          <div
+            key={stat.label}
+            className="surface-2 rounded-card px-4 py-5 shadow-soft"
+            style={{ "--stagger-i": i }}
+          >
+            <p className="font-display text-2xl leading-none text-accent">
+              {stat.value}
+            </p>
+            <p className="mt-2 text-xs font-bold uppercase tracking-widest text-muted">
+              {stat.label}
+            </p>
+          </div>
+        ))}
+      </section>
+      <p className="mt-3 text-sm text-muted">{drinkComment(allTimeDrinks)}</p>
 
       <Link
         href="/profil/wrapped"

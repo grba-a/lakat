@@ -12,8 +12,11 @@ import {
   fomoPushBody,
   najavaPushBody,
   commentPushBody,
+  koloPushBody,
+  drinkMilestonePushBody,
 } from "@/lib/push-copy";
 import { evaluateBadges } from "@/lib/badges";
+import { DRINK_TYPES, drinkInfo } from "@/lib/drinks";
 
 const FOMO_MIN_PRESENT = 3;
 
@@ -420,4 +423,204 @@ export async function cancelCheckIn() {
     return { error: `Poništavanje nije prošlo: ${error.message}` };
   }
   return { ok: true };
+}
+
+const DRINK_LOG_COOLDOWN_MS = 45 * 1000;
+
+// Logiranje pića — samo dok si aktivno checkiran (brojač živi na Šanku uz
+// prisutne); redni broj se ne sprema, derivira se brojanjem redova
+export async function logDrink(drinkType) {
+  if (!drinkInfo(drinkType)) {
+    return { error: "To piće ne postoji, hakeru." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { active } = await getActiveGroup(supabase, user.id);
+  if (!active) {
+    return { error: "Nisi ni u jednoj grupi. Gdje točno piješ?" };
+  }
+
+  const dayStart = getCurrentDayStart();
+
+  const { data: activeCheckin } = await supabase
+    .from("checkins")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("group_id", active.id)
+    .is("cancelled_at", null)
+    .gte("checked_in_at", dayStart.toISOString())
+    .limit(1);
+  if (!activeCheckin?.length) {
+    return { error: "Prvo se checkiraj, pa onda cugaj. Redoslijed, pička ti materina." };
+  }
+
+  const { data: mine } = await supabase
+    .from("drinks")
+    .select("id, logged_at")
+    .eq("user_id", user.id)
+    .eq("group_id", active.id)
+    .gte("logged_at", dayStart.toISOString())
+    .order("logged_at", { ascending: false })
+    .limit(1);
+  if (mine?.length && Date.now() - new Date(mine[0].logged_at).getTime() < DRINK_LOG_COOLDOWN_MS) {
+    return { error: "Polako, majstore. Ni Bukowski nije pio tako brzo." };
+  }
+
+  const { error } = await supabase
+    .from("drinks")
+    .insert({ user_id: user.id, group_id: active.id, drink_type: drinkType });
+  if (error) {
+    return { error: `Nije prošlo: ${error.message}` };
+  }
+
+  const { count } = await supabase
+    .from("drinks")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("group_id", active.id)
+    .gte("logged_at", dayStart.toISOString());
+  const tonightCount = count ?? 0;
+
+  let newBadges = [];
+  try {
+    newBadges = await evaluateBadges({
+      admin: createAdminClient(),
+      userId: user.id,
+      groupId: active.id,
+      trigger: "drink",
+      context: { tonightCount },
+    });
+  } catch {
+    // ignoriraj: piće je prošlo, bedževi su bonus
+  }
+
+  // Milestone push SAMO na točno deseto piće — volumen notifikacija nizak
+  if (tonightCount === 10) {
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", user.id)
+        .maybeSingle();
+      await notifyGroup({
+        groupId: active.id,
+        groupName: active.name,
+        senderId: user.id,
+        body: drinkMilestonePushBody(profile?.username ?? "Netko"),
+      });
+    } catch {
+      // best-effort
+    }
+  }
+
+  return { ok: true, count: tonightCount, newBadges };
+}
+
+// Krivi tap — briše zadnje logirano piće večeras (samo svoje)
+export async function undoLastDrink() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { active } = await getActiveGroup(supabase, user.id);
+  if (!active) {
+    return { error: "Nisi ni u jednoj grupi." };
+  }
+
+  const dayStart = getCurrentDayStart();
+  const { data: rows, error: findError } = await supabase
+    .from("drinks")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("group_id", active.id)
+    .gte("logged_at", dayStart.toISOString())
+    .order("logged_at", { ascending: false })
+    .limit(1);
+  if (findError) {
+    return { error: `Nešto je puklo: ${findError.message}` };
+  }
+  if (!rows?.length) {
+    return { error: "Nemaš što brisati. Trijezan ko sudac." };
+  }
+
+  const { error } = await supabase.from("drinks").delete().eq("id", rows[0].id);
+  if (error) {
+    return { error: `Nije prošlo: ${error.message}` };
+  }
+  return { ok: true };
+}
+
+// Kolo pića — rezultat bira ISKLJUČIVO server (anti-cheat); strogo 1 spin
+// po večeri, nema žalbe
+export async function spinKolo() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { active } = await getActiveGroup(supabase, user.id);
+  if (!active) {
+    return { error: "Nisi ni u jednoj grupi. Gdje bi to pio?" };
+  }
+
+  const dayStart = getCurrentDayStart();
+
+  const { data: activeCheckin } = await supabase
+    .from("checkins")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("group_id", active.id)
+    .is("cancelled_at", null)
+    .gte("checked_in_at", dayStart.toISOString())
+    .limit(1);
+  if (!activeCheckin?.length) {
+    return { error: "Prvo se checkiraj, pa onda vrti kolo." };
+  }
+
+  const { data: already } = await supabase
+    .from("kolo_spins")
+    .select("id, result")
+    .eq("user_id", user.id)
+    .eq("group_id", active.id)
+    .gte("created_at", dayStart.toISOString())
+    .limit(1);
+  if (already?.length) {
+    return { error: "Kolo je presudilo. Nema žalbe.", already: true, result: already[0].result };
+  }
+
+  const result = DRINK_TYPES[Math.floor(Math.random() * DRINK_TYPES.length)].key;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("kolo_spins")
+    .insert({ user_id: user.id, group_id: active.id, result });
+  if (error) {
+    return { error: `Kolo je zapelo: ${error.message}` };
+  }
+
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle();
+    await notifyGroup({
+      groupId: active.id,
+      groupName: active.name,
+      senderId: user.id,
+      body: koloPushBody(profile?.username ?? "Netko", drinkInfo(result)?.label ?? result),
+    });
+  } catch {
+    // best-effort
+  }
+
+  return { ok: true, result };
 }

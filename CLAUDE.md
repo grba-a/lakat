@@ -44,11 +44,13 @@ Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `s
 - `reactions`: checkin_id, user_id, emoji (unique po user/checkin)
 - `najave`: "stižem" najave dolaska
 - `push_subscriptions`: user_id, subscription (jsonb), created_at
+- `drinks`: beer log — id, user_id, group_id, drink_type, logged_at. Redni broj pića se ne sprema, derivira se brojanjem redova po lakat-danu.
+- `kolo_spins`: kolo pića — id, user_id, group_id, result, created_at. Rezultat bira ISKLJUČIVO server (spinKolo akcija), nema client insert policyja. Max 1 spin po lakat-danu, provjereno server-side.
 
 RLS je uključen i grupno-scopan (`is_member(group_id)`, `shares_group_with(id)` helper funkcije). Sva pisanja u `groups`/`group_members` idu isključivo kroz service-role admin klijent (`lib/supabase/admin.js`), nema client insert/update policyja na tim tablicama.
 
 ## Realtime
-Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkins`/`najave`/`reactions` (INSERT/UPDATE). Kad netko klikne "TU SAM", popis se svima u istoj grupi osvježi bez refresha.
+Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkins`/`najave`/`reactions`/`drinks`/`kolo_spins` (INSERT/UPDATE, `drinks` i reakcije i DELETE). Kad netko klikne "TU SAM" ili logira piće, popis se svima u istoj grupi osvježi bez refresha.
 
 ## Env varijable (.env.local)
 - NEXT_PUBLIC_SUPABASE_URL

@@ -5,12 +5,23 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getCurrentDayStart } from "@/lib/day";
 import { downscaleToBlob } from "@/lib/image";
-import { checkIn, cancelCheckIn, najaviDolazak, react } from "@/app/actions";
+import {
+  checkIn,
+  cancelCheckIn,
+  najaviDolazak,
+  react,
+  logDrink,
+  undoLastDrink,
+  spinKolo,
+} from "@/app/actions";
 import Avatar from "./avatar";
 import PhotoLightbox from "./photo-lightbox";
 import ReactionBar, { toggleReaction } from "./reaction-bar";
 import CommentThread from "./comment-thread";
 import BadgeToast from "./badge-toast";
+import DrinkBar from "./drink-bar";
+import KoloPica from "./kolo-pica";
+import { drinkInfo } from "@/lib/drinks";
 
 const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -30,6 +41,9 @@ export default function Sank({
   titles = {},
   initialNajave = [],
   initialReactions = {},
+  initialDrinks = [],
+  initialSpins = [],
+  monthDrinkCount = 0,
 }) {
   // Svi današnji checkin REDOVI po id-u (jedan korisnik može imati više:
   // checkin -> poništi -> novi checkin). Realtime UPDATE mijenja red po id-u.
@@ -45,6 +59,17 @@ export default function Sank({
   });
   // checkinId -> [{ user_id, emoji }]
   const [reactions, setReactions] = useState(initialReactions);
+  // Pića i spinovi kola, po id-u reda — obrazac identičan rows/najave
+  const [drinks, setDrinks] = useState(() => {
+    const map = {};
+    for (const d of initialDrinks) map[d.id] = d;
+    return map;
+  });
+  const [spins, setSpins] = useState(() => {
+    const map = {};
+    for (const s of initialSpins) map[s.id] = s;
+    return map;
+  });
   const [now, setNow] = useState(() => Date.now());
   const [dayStartIso, setDayStartIso] = useState(() =>
     getCurrentDayStart().toISOString()
@@ -110,6 +135,28 @@ export default function Sank({
           });
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "drinks", filter: groupFilter },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            setDrinks((prev) => {
+              const next = { ...prev };
+              delete next[payload.old.id];
+              return next;
+            });
+            return;
+          }
+          setDrinks((prev) => ({ ...prev, [payload.new.id]: payload.new }));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "kolo_spins", filter: groupFilter },
+        (payload) => {
+          setSpins((prev) => ({ ...prev, [payload.new.id]: payload.new }));
+        }
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -165,6 +212,28 @@ export default function Sank({
     };
   }, []);
 
+  // Isti obrazac kao tmp checkin: čim pravi (broj-id) red za mene stigne
+  // realtimeom, tmp red pića više ne treba
+  useEffect(() => {
+    const tmpPrefix = `tmp-drink-${currentUserId}`;
+    const hasTmp = Object.keys(drinks).some((id) => id.startsWith(tmpPrefix));
+    if (!hasTmp) return;
+    const hasReal = Object.values(drinks).some(
+      (d) =>
+        d.user_id === currentUserId &&
+        typeof d.id === "number" &&
+        d.logged_at >= dayStartIso
+    );
+    if (!hasReal) return;
+    setDrinks((prev) => {
+      const next = { ...prev };
+      for (const id of Object.keys(next)) {
+        if (id.startsWith(tmpPrefix)) delete next[id];
+      }
+      return next;
+    });
+  }, [drinks, currentUserId, dayStartIso]);
+
   // Po korisniku: najraniji aktivni checkin (dolazak + slika), najkasnije
   // poništenje i najsvježija živa najava dolaska
   const { present, arriving, fled, absent } = useMemo(() => {
@@ -190,6 +259,17 @@ export default function Sank({
       if (!prev || n.created_at > prev) arrivingAt.set(n.user_id, n.created_at);
     }
 
+    const drinkCountByUser = new Map();
+    for (const d of Object.values(drinks)) {
+      if (d.logged_at < dayStartIso) continue;
+      drinkCountByUser.set(d.user_id, (drinkCountByUser.get(d.user_id) ?? 0) + 1);
+    }
+    const spinByUser = new Map();
+    for (const s of Object.values(spins)) {
+      if (s.created_at < dayStartIso) continue;
+      spinByUser.set(s.user_id, s.result);
+    }
+
     const present = [];
     const arriving = [];
     const fled = [];
@@ -204,6 +284,8 @@ export default function Sank({
           arrivedAt: u.active.checked_in_at,
           photoUrl: u.active.photo_url ?? null,
           thumbUrl: u.active.thumb_url ?? null,
+          drinkCount: drinkCountByUser.get(p.id) ?? 0,
+          spinDrink: spinByUser.get(p.id) ?? null,
         });
       } else if (announcedAt && (!u?.cancelledAt || announcedAt > u.cancelledAt)) {
         arriving.push({ ...p, announcedAt });
@@ -217,10 +299,13 @@ export default function Sank({
     arriving.sort((a, b) => b.announcedAt.localeCompare(a.announcedAt));
     fled.sort((a, b) => b.cancelledAt.localeCompare(a.cancelledAt));
     return { present, arriving, fled, absent };
-  }, [profiles, rows, najave, now, dayStartIso]);
+  }, [profiles, rows, najave, drinks, spins, now, dayStartIso]);
 
   const iAmPresent = present.some((p) => p.id === currentUserId);
   const iAmArriving = arriving.some((p) => p.id === currentUserId);
+  const me = present.find((p) => p.id === currentUserId);
+  const myTonightDrinkCount = me?.drinkCount ?? 0;
+  const mySpinDrink = me?.spinDrink ?? null;
 
   // Lokacija se traži paralelno s kamerom; odbijena/spora lokacija ne
   // blokira checkin (slika je dokaz, lokacija je bonus za mapu)
@@ -412,6 +497,51 @@ export default function Sank({
     });
   }
 
+  // Piće — optimistički tmp red odmah (isti obrazac kao checkin), pravo
+  // stiže realtimeom i tmp se makne u efektu ispod
+  function handleLogDrink(drinkType) {
+    setError(null);
+    const tmpId = `tmp-drink-${currentUserId}-${Date.now()}`;
+    setDrinks((prev) => ({
+      ...prev,
+      [tmpId]: {
+        id: tmpId,
+        user_id: currentUserId,
+        drink_type: drinkType,
+        logged_at: new Date().toISOString(),
+      },
+    }));
+    startTransition(async () => {
+      const result = await logDrink(drinkType);
+      if (result?.error) {
+        setError(result.error);
+        setDrinks((prev) => {
+          const next = { ...prev };
+          delete next[tmpId];
+          return next;
+        });
+        return;
+      }
+      if (result?.newBadges?.length) {
+        setBadgeQueue((prev) => [...prev, ...result.newBadges]);
+      }
+    });
+  }
+
+  // Krivi tap — bez optimizma, realtime DELETE povuče brojač dolje
+  function handleUndoDrink() {
+    setError(null);
+    startTransition(async () => {
+      const result = await undoLastDrink();
+      if (result?.error) setError(result.error);
+    });
+  }
+
+  // Rezultat bira server; KoloPica sama animira kolo na taj rezultat
+  async function handleSpin() {
+    return spinKolo();
+  }
+
   function profileHref(id) {
     return id === currentUserId ? "/profil" : `/korisnik/${id}`;
   }
@@ -481,6 +611,19 @@ export default function Sank({
         </button>
       )}
 
+      {iAmPresent && (
+        <>
+          <DrinkBar
+            tonightCount={myTonightDrinkCount}
+            mySpinDrink={mySpinDrink}
+            onLog={handleLogDrink}
+            onUndo={handleUndoDrink}
+            disabled={isPending}
+          />
+          <KoloPica mySpinDrink={mySpinDrink} onSpin={handleSpin} disabled={isPending} />
+        </>
+      )}
+
       {!iAmPresent && (
         <button
           type="button"
@@ -535,6 +678,12 @@ export default function Sank({
         <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
           Za šankom {present.length > 0 && `(${present.length})`}
         </h2>
+        {monthDrinkCount > 0 && (
+          <p className="mt-1 text-xs text-muted">
+            Grupa je ovaj mjesec sredila {monthDrinkCount}{" "}
+            {monthDrinkCount === 1 ? "piće" : "pića"}. Jetra plaču.
+          </p>
+        )}
 
         {present.length === 0 && (
           <p className="mt-4 text-sm text-muted">
@@ -566,6 +715,14 @@ export default function Sank({
                     {!p.photoUrl && (
                       <span className="text-[10px] font-bold uppercase tracking-wider text-danger">
                         Slikaj nam gdje si smrade.
+                      </span>
+                    )}
+                    {(p.drinkCount > 0 || p.spinDrink) && (
+                      <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted">
+                        {p.drinkCount > 0 && <span>🍺 {p.drinkCount}</span>}
+                        {p.spinDrink && (
+                          <span>🎡 {drinkInfo(p.spinDrink)?.label}</span>
+                        )}
                       </span>
                     )}
                   </span>

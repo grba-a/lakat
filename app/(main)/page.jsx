@@ -52,8 +52,19 @@ export default async function Home() {
   const windowStart = new Date(
     dayStart.getTime() - STATS_WINDOW_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
+  const todayKeyForMonth = getDayKey(new Date());
+  const [monthYear, monthNum] = monthOf(todayKeyForMonth).split("-").map(Number);
+  const monthStartIso = getCurrentDayStart(
+    new Date(Date.UTC(monthYear, monthNum - 1, 1, 12))
+  ).toISOString();
 
-  const [{ data: profiles }, { data: checkins }, allCheckins] = await Promise.all([
+  const [
+    { data: profiles },
+    { data: checkins },
+    allCheckins,
+    { data: drinks },
+    { data: spins },
+  ] = await Promise.all([
     supabase
       .from("profiles")
       .select(
@@ -68,7 +79,23 @@ export default async function Home() {
       .gte("checked_in_at", dayStart.toISOString())
       .order("checked_in_at", { ascending: true }),
     fetchAllCheckins(supabase, undefined, active.id, windowStart),
+    supabase
+      .from("drinks")
+      .select("id, user_id, drink_type, logged_at")
+      .eq("group_id", active.id)
+      .gte("logged_at", dayStart.toISOString()),
+    supabase
+      .from("kolo_spins")
+      .select("id, user_id, result, created_at")
+      .eq("group_id", active.id)
+      .gte("created_at", dayStart.toISOString()),
   ]);
+
+  const { count: monthDrinkCount } = await supabase
+    .from("drinks")
+    .select("id", { count: "exact", head: true })
+    .eq("group_id", active.id)
+    .gte("logged_at", monthStartIso);
 
   // Statistika unutar grupe kreće od ulaska u grupu (za staru ekipu = registracija)
   const allProfiles = (profiles ?? []).map((p) => ({
@@ -149,6 +176,9 @@ export default async function Home() {
         titles={titles}
         initialNajave={najave ?? []}
         initialReactions={reactionsByCheckin}
+        initialDrinks={drinks ?? []}
+        initialSpins={spins ?? []}
+        monthDrinkCount={monthDrinkCount ?? 0}
       />
       {wrappedMonthKey && <WrappedBanner monthKey={wrappedMonthKey} />}
       <Memorije
