@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth";
@@ -8,7 +7,6 @@ import PushToggle from "../push-toggle";
 import UsernameForm from "../username-form";
 import PasswordForm from "../password-form";
 import MojeGrupe from "./moje-grupe";
-import MapEmojiPicker from "./map-emoji-picker";
 
 export default async function PostavkePage() {
   const user = await getUser();
@@ -18,7 +16,7 @@ export default async function PostavkePage() {
   const [{ data: profile }, groups] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, map_emoji")
+      .select("username")
       .eq("id", user.id)
       .maybeSingle(),
     getMyGroups(supabase, user.id),
@@ -55,17 +53,14 @@ export default async function PostavkePage() {
 
   return (
     <main className="flex flex-1 flex-col">
-      <Link
-        href="/profil"
-        className="pressable mt-6 inline-flex w-fit items-center gap-1 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted active:bg-white/5"
-      >
-        ← Profil
-      </Link>
-
-      <section className="mt-4">
+      <section className="mt-8">
         <h1 className="font-display text-5xl uppercase leading-none tracking-tight">
           Postavke<span className="text-accent">.</span>
         </h1>
+        <p className="mt-3 text-sm text-muted">
+          <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
+          Račun, obavijesti i tvoje grupe.
+        </p>
       </section>
 
       <PushToggle vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY} />
@@ -84,11 +79,9 @@ export default async function PostavkePage() {
         </div>
       </section>
 
-      <MapEmojiPicker current={profile?.map_emoji ?? null} />
-
       <MojeGrupe groups={grupe} myId={user.id} />
 
-      <section className="mt-10">
+      <section className="mt-12 border-t border-white/5 pt-8">
         <form action={logout}>
           <button
             type="submit"

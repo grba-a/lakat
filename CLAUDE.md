@@ -32,6 +32,8 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
    - Korisniku registriranom sredinom mjeseca broji se samo od dana registracije (usporedba po postotku mogućih dana, ne apsolutnom broju).
    - Izjednačenje → svi izjednačeni su pička mjeseca.
    - Računa se on-the-fly kad netko otvori hall of shame. NEMA cron joba.
+   - Grace period: prvih 7 dana od učlanjenja u grupu član je "novi" (`isNew` u lib/stats.js) — ne može biti pička mjeseca i na /shame je prikazan odvojeno ("pošteda"). Rang srama prikazuje samo top 3 (🥇🥈🥉).
+   - Popis na Šanku prikazuje samo prisutne / koji stižu / pobjegle — "nema ga" korisnici se NE prikazuju.
 6. **Registracija**: email, lozinka, username, ime + šifra grupe (join postojeće ili create nove). Šifra grupe je hashirana u `groups.password_hash` (pgcrypto) i provjerava se ISKLJUČIVO server-side preko `verify_group_password` RPC-a (service_role only). Nikad ne slati šifru u klijentski bundle.
 
 ## Baza (Supabase)
@@ -44,8 +46,8 @@ Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `s
 - `reactions`: checkin_id, user_id, emoji (unique po user/checkin)
 - `najave`: "stižem" najave dolaska
 - `push_subscriptions`: user_id, subscription (jsonb), created_at
-- `drinks`: beer log — id, user_id, group_id, drink_type, logged_at. Redni broj pića se ne sprema, derivira se brojanjem redova po lakat-danu.
-- `kolo_spins`: kolo "Piće dana" — id, user_id, group_id, result, created_at. Rezultat bira ISKLJUČIVO server (spinKolo akcija), nema client insert policyja. Max 1 spin po lakat-danu PO KORISNIKU (bez obzira na grupu), bez check-in uvjeta; ikona u headeru (kolo-icon.jsx) nestaje nakon spina do 06:00.
+- `drinks`: beer log — id, user_id, group_id, drink_type, logged_at. Redni broj pića se ne sprema, derivira se brojanjem redova po lakat-danu. Lista pića je u `lib/drinks.js` (DRINK_TYPES, uklj. pelin od `supabase-pica3.sql`); zadnje danas logirano piće je ujedno marker korisnika na mapi (fallback: random emoji stabilan po danu). `profiles.map_emoji` postoji u bazi ali je DEPRECATED — picker je maknut, kolona se ne koristi.
+- `kolo_spins`: kolo "Piće dana" — id, user_id, group_id, result, created_at. Rezultat bira ISKLJUČIVO server (spinKolo akcija), nema client insert policyja. Max 1 spin po lakat-danu PO KORISNIKU (bez obzira na grupu), bez check-in uvjeta; ikona u headeru (kolo-icon.jsx) nestaje nakon spina do 06:00. Kolo se vrti povlačenjem prsta (nema tipke), fullscreen neprozirni overlay, X za zatvoriti; spin NE šalje push (namjerno maknuto). Rezultat kola je samo prijedlog dana — ne utječe na mapu.
 
 RLS je uključen i grupno-scopan (`is_member(group_id)`, `shares_group_with(id)` helper funkcije). Sva pisanja u `groups`/`group_members` idu isključivo kroz service-role admin klijent (`lib/supabase/admin.js`), nema client insert/update policyja na tim tablicama.
 

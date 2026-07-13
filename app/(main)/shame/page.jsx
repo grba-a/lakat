@@ -33,6 +33,9 @@ function formatPct(entry) {
   return `${Math.round(entry.pct * 100)}%`;
 }
 
+// Rang srama pokazuje samo podij — zlato za najveću pičku
+const MEDALS = ["🥇", "🥈", "🥉"];
+
 export default async function ShamePage() {
   const user = await getUser();
   if (!user) redirect("/login");
@@ -89,6 +92,8 @@ export default async function ShamePage() {
   const winners = bestOf(ranking).filter(
     (w) => !losers.some((l) => l.id === w.id)
   );
+  // Novi članovi (grace period) — prikazani odvojeno, bez postotka srama
+  const noviClanovi = ranking.filter((e) => e.isNew);
 
   // Arhiva: svaki prošli mjesec od najranije registracije, najnoviji prvi
   const months = [];
@@ -184,42 +189,72 @@ export default async function ShamePage() {
           Rang srama · {formatMonth(currentMonth)}
         </h2>
         <ul className="stagger mt-4 flex flex-col gap-2">
-          {ranking.map((entry, i) => {
-            const isLoser = losers.some((l) => l.id === entry.id);
-            return (
-              <li
-                key={entry.id}
-                className={`surface-2 pressable-soft rounded-row ${
-                  isLoser ? "border-danger/30 bg-danger/[0.08]" : ""
-                }`}
-                style={{ "--stagger-i": Math.min(i, 8) }}
-              >
+          {ranking
+            .filter((e) => !e.isNew)
+            .slice(0, 3)
+            .map((entry, i) => {
+              const isLoser = losers.some((l) => l.id === entry.id);
+              return (
+                <li
+                  key={entry.id}
+                  className={`surface-2 pressable-soft rounded-row ${
+                    isLoser ? "border-danger/30 bg-danger/[0.08]" : ""
+                  }`}
+                  style={{ "--stagger-i": Math.min(i, 8) }}
+                >
+                  <Link
+                    href={entry.id === user.id ? "/profil" : `/korisnik/${entry.id}`}
+                    className="flex h-14 items-center justify-between px-4"
+                  >
+                    <span className="flex items-center gap-3 font-bold">
+                      <span className="w-6 text-lg">{MEDALS[i]}</span>
+                      <Avatar
+                        username={entry.username}
+                        avatarUrl={entry.avatar_url}
+                        size={32}
+                        className={isLoser ? "border-danger/40" : ""}
+                      />
+                      {entry.username}
+                    </span>
+                    <span
+                      className={`text-xs font-bold uppercase tracking-widest ${
+                        isLoser ? "text-danger" : "text-muted"
+                      }`}
+                    >
+                      {entry.days}/{entry.possible} · {formatPct(entry)}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+        </ul>
+        {noviClanovi.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-2">
+            {noviClanovi.map((entry) => (
+              <li key={entry.id} className="surface-2 rounded-row opacity-60">
                 <Link
                   href={entry.id === user.id ? "/profil" : `/korisnik/${entry.id}`}
                   className="flex h-14 items-center justify-between px-4"
                 >
                   <span className="flex items-center gap-3 font-bold">
-                    <span className="w-5 text-sm text-muted">{i + 1}.</span>
                     <Avatar
                       username={entry.username}
                       avatarUrl={entry.avatar_url}
                       size={32}
-                      className={isLoser ? "border-danger/40" : ""}
                     />
                     {entry.username}
                   </span>
-                  <span
-                    className={`text-xs font-bold uppercase tracking-widest ${
-                      isLoser ? "text-danger" : "text-muted"
-                    }`}
-                  >
-                    {entry.days}/{entry.possible} · {formatPct(entry)}
+                  <span className="text-xs font-bold uppercase tracking-widest text-muted">
+                    Novi · pošteda još{" "}
+                    {entry.graceDaysLeft === 1
+                      ? "1 dan"
+                      : `${entry.graceDaysLeft} dana`}
                   </span>
                 </Link>
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="mt-10">

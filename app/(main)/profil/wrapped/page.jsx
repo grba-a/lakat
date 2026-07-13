@@ -124,14 +124,7 @@ export default async function WrappedPage({ searchParams }) {
 
   return (
     <main className="flex flex-1 flex-col">
-      <Link
-        href="/profil"
-        className="pressable mt-6 inline-flex w-fit items-center gap-1 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted active:bg-white/5"
-      >
-        ← Profil
-      </Link>
-
-      <section className="mt-4">
+      <section className="mt-8">
         <h1 className="font-display text-5xl uppercase leading-none tracking-tight">
           Wrapped<span className="text-accent">.</span>
         </h1>

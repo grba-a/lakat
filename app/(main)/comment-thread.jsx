@@ -141,9 +141,23 @@ export default function CommentThread({ checkinId, currentUserId }) {
         <button
           type="submit"
           disabled={isPending || !text.trim()}
-          className="pressable-soft h-10 shrink-0 rounded-field bg-accent px-3 text-xs font-bold uppercase tracking-wide text-black disabled:opacity-50"
+          aria-label="Pošalji komentar"
+          className="pressable-soft flex h-10 w-10 shrink-0 items-center justify-center rounded-field bg-accent text-black disabled:opacity-50"
         >
-          Pošalji
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 19V5" />
+            <path d="m5 12 7-7 7 7" />
+          </svg>
         </button>
       </form>
       {error && <p className="text-xs font-bold text-danger">{error}</p>}

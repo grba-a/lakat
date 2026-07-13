@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getActiveGroupFor } from "@/lib/auth";
@@ -71,14 +70,7 @@ export default async function KorisnikPage({ params }) {
 
   return (
     <main className="flex flex-1 flex-col">
-      <Link
-        href="/"
-        className="pressable mt-6 inline-flex w-fit items-center gap-1 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted active:bg-white/5"
-      >
-        ← Šank
-      </Link>
-
-      <section className="mt-4 flex items-center gap-5">
+      <section className="mt-8 flex items-center gap-5">
         <Avatar username={profile.username} avatarUrl={profile.avatar_url} size={80} />
         <div>
           <h1 className="font-display text-5xl uppercase leading-none tracking-tight">

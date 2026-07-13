@@ -12,7 +12,6 @@ import {
   fomoPushBody,
   najavaPushBody,
   commentPushBody,
-  koloPushBody,
   drinkMilestonePushBody,
 } from "@/lib/push-copy";
 import { evaluateBadges } from "@/lib/badges";
@@ -594,21 +593,7 @@ export async function spinKolo() {
     return { error: `Kolo je zapelo: ${error.message}` };
   }
 
-  try {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("username")
-      .eq("id", user.id)
-      .maybeSingle();
-    await notifyGroup({
-      groupId: active.id,
-      groupName: active.name,
-      senderId: user.id,
-      body: koloPushBody(profile?.username ?? "Netko", drinkInfo(result)?.label ?? result),
-    });
-  } catch {
-    // best-effort
-  }
-
+  // Namjerno bez pusha: rezultat kola vide svi na Šanku (realtime), a
+  // notifikacija po svakom spinu je gnjavila — odluka korisnika
   return { ok: true, result };
 }

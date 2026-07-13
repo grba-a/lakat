@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { getCurrentDayStart, getDayKey } from "@/lib/day";
+import { drinkInfo } from "@/lib/drinks";
 
 // Leaflet dira window pa se smije učitati tek u browseru
 const MapView = dynamic(() => import("./map-view"), {
@@ -15,7 +16,9 @@ const MapView = dynamic(() => import("./map-view"), {
   ),
 });
 
-// Random emoji po korisniku, stabilan cijeli lakat-dan (user + dan -> hash)
+// Fallback dok korisnik danas nije logirao nijedno piće: random emoji po
+// korisniku, stabilan cijeli lakat-dan (user + dan -> hash). Čim logira,
+// marker postane emoji zadnjeg pića (kolo je samo prijedlog, ne utječe).
 const EMOJI = ["🍺", "🍻", "🥴", "🍷", "🥃", "🤙", "🦍", "🔥", "🍕", "🚬"];
 
 function emojiFor(userId, dayKey) {
@@ -30,10 +33,20 @@ const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   minute: "2-digit",
 });
 
-export default function MapClient({ groupId, profiles, initialCheckins }) {
+export default function MapClient({
+  groupId,
+  profiles,
+  initialCheckins,
+  initialDrinks = [],
+}) {
   const [rows, setRows] = useState(() => {
     const map = {};
     for (const c of initialCheckins) map[c.id] = c;
+    return map;
+  });
+  const [drinks, setDrinks] = useState(() => {
+    const map = {};
+    for (const d of initialDrinks) map[d.id] = d;
     return map;
   });
   const [dayStartIso, setDayStartIso] = useState(() =>
@@ -62,6 +75,21 @@ export default function MapClient({ groupId, profiles, initialCheckins }) {
           );
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "drinks", filter: groupFilter },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            setDrinks((prev) => {
+              const next = { ...prev };
+              delete next[payload.old.id];
+              return next;
+            });
+            return;
+          }
+          setDrinks((prev) => ({ ...prev, [payload.new.id]: payload.new }));
+        }
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -79,7 +107,6 @@ export default function MapClient({ groupId, profiles, initialCheckins }) {
   // Po korisniku: najnoviji AKTIVNI checkin s koordinatama
   const markers = useMemo(() => {
     const usernames = new Map(profiles.map((p) => [p.id, p.username]));
-    const emojis = new Map(profiles.map((p) => [p.id, p.map_emoji]));
     const byUser = new Map();
     for (const row of Object.values(rows)) {
       if (row.checked_in_at < dayStartIso) continue;
@@ -89,18 +116,27 @@ export default function MapClient({ groupId, profiles, initialCheckins }) {
         byUser.set(row.user_id, row);
       }
     }
+    // Zadnje danas logirano piće po korisniku
+    const lastDrink = new Map();
+    for (const d of Object.values(drinks)) {
+      if (d.logged_at < dayStartIso) continue;
+      const prev = lastDrink.get(d.user_id);
+      if (!prev || d.logged_at > prev.logged_at) lastDrink.set(d.user_id, d);
+    }
     const dayKey = getDayKey(new Date());
     return [...byUser.values()].map((row) => ({
       id: row.user_id,
       lat: row.lat,
       lng: row.lng,
-      // Odabrani emoji iz postavki, inače nasumičan (stabilan po danu)
-      emoji: emojis.get(row.user_id) || emojiFor(row.user_id, dayKey),
+      // Što stvarno pije (zadnje piće), inače nasumičan (stabilan po danu)
+      emoji:
+        drinkInfo(lastDrink.get(row.user_id)?.drink_type)?.emoji ||
+        emojiFor(row.user_id, dayKey),
       username: usernames.get(row.user_id) ?? "Netko",
       time: timeFmt.format(new Date(row.checked_in_at)),
       photoUrl: row.thumb_url ?? row.photo_url ?? null,
     }));
-  }, [profiles, rows, dayStartIso]);
+  }, [profiles, rows, drinks, dayStartIso]);
 
   return (
     <>

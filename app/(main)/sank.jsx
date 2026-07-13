@@ -233,8 +233,9 @@ export default function Sank({
   }, [drinks, currentUserId, dayStartIso]);
 
   // Po korisniku: najraniji aktivni checkin (dolazak + slika), najkasnije
-  // poništenje i najsvježija živa najava dolaska
-  const { present, arriving, fled, absent } = useMemo(() => {
+  // poništenje i najsvježija živa najava dolaska. Tko nema ništa od toga,
+  // ne prikazuje se — lista pokazuje samo zbivanja dana.
+  const { present, arriving, fled } = useMemo(() => {
     const byUser = new Map();
     for (const row of Object.values(rows)) {
       if (row.checked_in_at < dayStartIso) continue;
@@ -271,7 +272,6 @@ export default function Sank({
     const present = [];
     const arriving = [];
     const fled = [];
-    const absent = [];
     for (const p of profiles) {
       const u = byUser.get(p.id);
       const announcedAt = arrivingAt.get(p.id);
@@ -289,14 +289,12 @@ export default function Sank({
         arriving.push({ ...p, announcedAt });
       } else if (u?.cancelledAt) {
         fled.push({ ...p, cancelledAt: u.cancelledAt });
-      } else {
-        absent.push(p);
       }
     }
     present.sort((a, b) => b.arrivedAt.localeCompare(a.arrivedAt));
     arriving.sort((a, b) => b.announcedAt.localeCompare(a.announcedAt));
     fled.sort((a, b) => b.cancelledAt.localeCompare(a.cancelledAt));
-    return { present, arriving, fled, absent };
+    return { present, arriving, fled };
   }, [profiles, rows, najave, drinks, spins, now, dayStartIso]);
 
   const iAmPresent = present.some((p) => p.id === currentUserId);
@@ -757,22 +755,23 @@ export default function Sank({
             >
               <Link
                 href={profileHref(p.id)}
-                className="flex h-14 items-center justify-between px-4"
+                className="flex min-h-14 items-center justify-between gap-2 px-4 py-2"
               >
-                <span className="flex items-center gap-3 font-bold">
+                <span className="flex min-w-0 items-center gap-3 font-bold">
                   <Avatar
                     username={p.username}
                     avatarUrl={p.avatar_url}
                     size={32}
                     className="border-amber-400/40"
                   />
-                  <span className="flex flex-col">
-                    {p.username}
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate">{p.username}</span>
                     <Title id={p.id} />
                   </span>
                 </span>
-                <span className="text-xs font-bold uppercase tracking-widest text-amber-300">
-                  Stiže (navodno) · {timeFmt.format(new Date(p.announcedAt))}
+                <span className="flex shrink-0 flex-col items-end text-xs font-bold uppercase tracking-widest text-amber-300">
+                  <span>Stiže (navodno)</span>
+                  <span>{timeFmt.format(new Date(p.announcedAt))}</span>
                 </span>
               </Link>
             </li>
@@ -801,29 +800,6 @@ export default function Sank({
                 </span>
                 <span className="text-xs font-bold uppercase tracking-widest text-danger">
                   Pobjegao u {timeFmt.format(new Date(p.cancelledAt))}
-                </span>
-              </Link>
-            </li>
-          ))}
-          {absent.map((p, i) => (
-            <li
-              key={p.id}
-              className="surface-2 pressable-soft rounded-row opacity-40 transition-opacity duration-300"
-              style={{ "--stagger-i": Math.min(present.length + arriving.length + fled.length + i, 8) }}
-            >
-              <Link
-                href={profileHref(p.id)}
-                className="flex h-14 items-center justify-between px-4"
-              >
-                <span className="flex items-center gap-3 font-bold">
-                  <Avatar username={p.username} avatarUrl={p.avatar_url} size={32} />
-                  <span className="flex flex-col">
-                    {p.username}
-                    <Title id={p.id} />
-                  </span>
-                </span>
-                <span className="text-xs font-bold uppercase tracking-widest text-muted">
-                  Nema ga
                 </span>
               </Link>
             </li>

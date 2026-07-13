@@ -1,4 +1,5 @@
 import { ViewTransition } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { countActiveFriends } from "@/lib/friends";
@@ -45,9 +46,13 @@ export default async function MainLayout({ children }) {
         style={{ viewTransitionName: "app-header" }}
       >
         <div className="flex-1">
-          <p className="font-display text-3xl uppercase leading-none tracking-tight">
+          <Link
+            href="/"
+            aria-label="Na Šank"
+            className="pressable inline-block font-display text-3xl uppercase leading-none tracking-tight"
+          >
             Lakat<span className="text-accent">.</span>
-          </p>
+          </Link>
         </div>
         <div className="flex flex-1 justify-center">
           {active && groups.length > 1 && (
