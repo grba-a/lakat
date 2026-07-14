@@ -49,7 +49,7 @@ export default async function GroupInvitePage({ params }) {
         <span className="text-accent">.</span>
       </h1>
       <p className="mt-3 text-sm text-muted">
-        {n === 1 ? "1 pijanac te čeka" : `${n} pijanaca te čeka`} za šankom.
+        {`${n} ${n === 1 ? "pjanac" : n % 100 >= 2 && n % 100 <= 4 ? "pjanca" : "pjanaca"} te čeka`} za šankom.
       </p>
 
       <JoinByLinkButton code={normalized} />

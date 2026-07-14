@@ -69,7 +69,7 @@ export default function MapView({ markers }) {
         ? `<img src="${m.photoUrl}" alt="" style="width:120px;height:120px;object-fit:cover;border-radius:12px;margin-top:6px" />`
         : "";
       marker.bindPopup(
-        `<strong>${m.username}</strong><br/>checkiran u ${m.time}${photo}`
+        `<strong>${m.username}</strong><br/>za šankom od ${m.time}${photo}`
       );
     }
 

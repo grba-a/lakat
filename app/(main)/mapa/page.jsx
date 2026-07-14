@@ -19,7 +19,7 @@ export default async function MapaPage() {
             Nisi u grupi.
           </p>
           <p className="mt-2 text-sm text-muted">
-            Uđi u grupu da vidiš gdje se ekipa checkira.
+            Uđi u grupu da vidiš gdje ekipa pije.
           </p>
           <Link
             href="/"
@@ -62,7 +62,7 @@ export default async function MapaPage() {
         </h1>
         <p className="mt-3 text-sm text-muted">
           <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
-          Tko se danas checkirao i odakle.
+          Tko je danas bio za šankom i odakle.
         </p>
       </section>
 

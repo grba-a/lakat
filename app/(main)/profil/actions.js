@@ -17,7 +17,7 @@ export async function changeUsername(prevState, formData) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Nisi ulogiran." };
+  if (!user) return { error: "Nisi prijavljen." };
 
   const { error } = await supabase
     .from("profiles")
@@ -46,7 +46,7 @@ export async function changePassword(prevState, formData) {
     return { error: "Lozinka mora imati bar 6 znakova. Znam da je teško." };
   }
   if (password !== confirm) {
-    return { error: "Lozinke se ne poklapaju. Otriježni se pa probaj opet." };
+    return { error: "Lozinke se ne poklapaju. Otrijezni se pa probaj opet." };
   }
 
   const supabase = await createClient();
@@ -71,7 +71,7 @@ export async function savePushSubscription(subscription) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Nisi ulogiran." };
+  if (!user) return { error: "Nisi prijavljen." };
 
   const { error } = await supabase
     .from("push_subscriptions")
@@ -89,7 +89,7 @@ export async function deletePushSubscription(endpoint) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { error: "Nisi ulogiran." };
+  if (!user) return { error: "Nisi prijavljen." };
 
   const { error } = await supabase
     .from("push_subscriptions")

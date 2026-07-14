@@ -455,7 +455,7 @@ export async function logDrink(drinkType) {
     .gte("checked_in_at", dayStart.toISOString())
     .limit(1);
   if (!activeCheckin?.length) {
-    return { error: "Prvo se checkiraj, pa onda cugaj. Redoslijed, pička ti materina." };
+    return { error: "Prvo sjedni za šank, pa onda cugaj. Redoslijed, pička ti materina." };
   }
 
   const { data: mine } = await supabase

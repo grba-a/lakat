@@ -93,7 +93,7 @@ function RegisterForm() {
           href={next !== "/" ? `/login?next=${encodeURIComponent(next)}` : "/login"}
           className="font-bold text-accent underline underline-offset-4"
         >
-          Ulogiraj se.
+          Prijavi se.
         </Link>
       </p>
     </main>

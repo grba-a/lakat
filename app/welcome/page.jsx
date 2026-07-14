@@ -53,7 +53,7 @@ const FEATURES = [
       </>
     ),
     title: "Mapa",
-    body: "Gdje se ekipa danas checkirala, na karti.",
+    body: "Gdje je ekipa danas pila, na karti.",
   },
   {
     icon: (
@@ -150,7 +150,7 @@ export default function WelcomePage() {
         <p className="mt-4 text-xl leading-relaxed">
           Lakat je aplikacija za tvoju ekipu. Kad si vani za šankom, stisneš{" "}
           <span className="font-bold text-accent">TU SAM</span> i svi uživo vide
-          da si tu. Bez grupnih poruka, bez „di ste ljudi" — samo otvoriš i vidiš
+          da si tu. Bez grupnih poruka, bez „di ste ljudi“ — samo otvoriš i vidiš
           tko je gdje.
         </p>
         <p className="mt-4 text-lg leading-relaxed text-muted">
@@ -195,7 +195,7 @@ export default function WelcomePage() {
             Osnuj grupu<span className="text-accent">.</span>
           </p>
           <p className="mt-4 text-lg leading-relaxed text-muted">
-            Ti si taj koji uvijek piše „di ste"? Osnuj grupu za svoju ekipu,
+            Ti si taj koji uvijek piše „di ste“? Osnuj grupu za svoju ekipu,
             pozovi ih jednim linkom i neka statistika sudi tko je legenda, a tko
             pička mjeseca.
           </p>
@@ -232,7 +232,7 @@ export default function WelcomePage() {
             Ekipa te čeka<span className="text-accent">.</span>
           </p>
           <p className="mt-3 text-sm text-muted">
-            Otvori račun, uleti u BETA, dođi za šank.
+            Otvori račun, uđi u BETA, dođi za šank.
           </p>
           <Link
             href="/register"

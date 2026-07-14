@@ -134,7 +134,7 @@ export async function removeFriend(id) {
   const { error } = await admin.from("friendships").delete().eq("id", id);
   if (error) return { error: `Nije prošlo: ${error.message}` };
   revalidatePath("/profil/frendovi");
-  return { ok: true, message: "Makut. Sam si kriv." };
+  return { ok: true, message: "Maknut. Sam si kriv." };
 }
 
 export async function inviteToGroup(groupId, friendId) {

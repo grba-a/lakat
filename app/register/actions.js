@@ -27,7 +27,7 @@ export async function register(prevState, formData) {
     if (/already registered/i.test(error.message)) {
       const signIn = await supabase.auth.signInWithPassword({ email, password });
       if (signIn.error) {
-        return { error: "Taj email je već registriran. Probaj se ulogirati." };
+        return { error: "Taj email je već registriran. Probaj se prijaviti." };
       }
       data = signIn.data;
     } else {
@@ -38,7 +38,7 @@ export async function register(prevState, formData) {
   if (!data.session) {
     return {
       error:
-        "Račun je kreiran, ali nema sesije. U Supabaseu isključi 'Confirm email' pa probaj opet.",
+        "Račun je tu, ali prijava nije prošla sama od sebe. Probaj se prijaviti.",
     };
   }
 

@@ -9,7 +9,7 @@ import OfflineBanner from "./offline-banner";
 import PresenceHeartbeat from "./presence-heartbeat";
 import GroupSwitcher from "./group-switcher";
 import FriendsBadge from "./friends-badge";
-import KoloIcon from "./kolo-icon";
+import KoloIcon from "./kolo-icon-lazy";
 
 export default async function MainLayout({ children }) {
   const user = await getUser();

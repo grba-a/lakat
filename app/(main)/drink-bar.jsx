@@ -39,7 +39,7 @@ export default function DrinkBar({
           </button>
         ))}
       </div>
-      {mySpinDrink && (
+      {DRINK_TYPES.some((d) => d.key === mySpinDrink) && (
         <p className="mt-2 text-xs font-bold uppercase tracking-wider text-accent">
           Kolo kaže: {DRINK_TYPES.find((d) => d.key === mySpinDrink)?.label}
         </p>

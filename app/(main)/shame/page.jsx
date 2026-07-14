@@ -33,6 +33,13 @@ function formatPct(entry) {
   return `${Math.round(entry.pct * 100)}%`;
 }
 
+// Inventar mjeseca: tko ima dolazaka i nije među pičkama tog mjeseca
+function winnersOf(rank, losers) {
+  return bestOf(rank).filter(
+    (w) => w.days > 0 && !losers.some((l) => l.id === w.id)
+  );
+}
+
 // Rang srama pokazuje samo podij — zlato za najveću pičku
 const MEDALS = ["🥇", "🥈", "🥉"];
 
@@ -82,6 +89,10 @@ export default async function ShamePage() {
   const todayKey = getDayKey(new Date());
   const currentMonth = monthOf(todayKey);
 
+  function profileHref(id) {
+    return id === user.id ? "/profil" : `/korisnik/${id}`;
+  }
+
   const ranking = monthRanking({
     profiles: allProfiles,
     daySets,
@@ -89,9 +100,8 @@ export default async function ShamePage() {
     todayKey,
   });
   const losers = worstOf(ranking);
-  const winners = bestOf(ranking).filter(
-    (w) => !losers.some((l) => l.id === w.id)
-  );
+  // Inventar bez ijednog dolaska nije inventar — 0% se ne slavi
+  const winners = winnersOf(ranking, losers);
   // Novi članovi (grace period) — prikazani odvojeno, bez postotka srama
   const noviClanovi = ranking.filter((e) => e.isNew);
 
@@ -117,9 +127,7 @@ export default async function ShamePage() {
     return {
       monthKey,
       losers: monthLosers,
-      winners: bestOf(monthRank).filter(
-        (w) => !monthLosers.some((l) => l.id === w.id)
-      ),
+      winners: winnersOf(monthRank, monthLosers),
     };
   });
 
@@ -203,7 +211,7 @@ export default async function ShamePage() {
                   style={{ "--stagger-i": Math.min(i, 8) }}
                 >
                   <Link
-                    href={entry.id === user.id ? "/profil" : `/korisnik/${entry.id}`}
+                    href={profileHref(entry.id)}
                     className="flex h-14 items-center justify-between px-4"
                   >
                     <span className="flex items-center gap-3 font-bold">
@@ -233,7 +241,7 @@ export default async function ShamePage() {
             {noviClanovi.map((entry) => (
               <li key={entry.id} className="surface-2 rounded-row opacity-60">
                 <Link
-                  href={entry.id === user.id ? "/profil" : `/korisnik/${entry.id}`}
+                  href={profileHref(entry.id)}
                   className="flex h-14 items-center justify-between px-4"
                 >
                   <span className="flex items-center gap-3 font-bold">
@@ -352,7 +360,7 @@ export default async function ShamePage() {
                 style={{ "--stagger-i": Math.min(i, 8) }}
               >
                 <Link
-                  href={entry.id === user.id ? "/profil" : `/korisnik/${entry.id}`}
+                  href={profileHref(entry.id)}
                   className="flex h-14 items-center justify-between px-4"
                 >
                   <span className="flex items-center gap-3 font-bold">
@@ -365,7 +373,12 @@ export default async function ShamePage() {
                     {entry.username}
                   </span>
                   <span className="text-xs font-bold uppercase tracking-widest text-muted">
-                    {entry.value} dolazaka
+                    {entry.value}{" "}
+                    {entry.value === 1
+                      ? "dolazak"
+                      : entry.value % 100 >= 2 && entry.value % 100 <= 4
+                        ? "dolaska"
+                        : "dolazaka"}
                   </span>
                 </Link>
               </li>
@@ -391,7 +404,7 @@ export default async function ShamePage() {
                 style={{ "--stagger-i": Math.min(i, 8) }}
               >
                 <Link
-                  href={entry.id === user.id ? "/profil" : `/korisnik/${entry.id}`}
+                  href={profileHref(entry.id)}
                   className="flex h-14 items-center justify-between px-4"
                 >
                   <span className="flex items-center gap-3 font-bold">

@@ -1,6 +1,9 @@
-// Minimalni SW za instalabilnost. Network-first: uvijek svježi podaci,
-// cache služi samo kao offline fallback.
-const CACHE = "lakat-v3";
+// SW: instalabilnost + push + pametno keširanje.
+// - RSC/prefetch zahtjeve Next routera NE presrećemo (sintetski error
+//   odgovor tjera router na puni page reload — uzrok štekanja navigacije)
+// - hashirani statički asseti su cache-first (immutable)
+// - navigacije su network-first s offline fallbackom
+const CACHE = "lakat-v4";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("push", (event) => {
@@ -49,30 +52,74 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Immutable asseti: hashirani chunkovi, fontovi, ikone, manifest
+function isStaticAsset(url) {
+  return (
+    url.pathname.startsWith("/_next/static/") ||
+    url.pathname === "/manifest.webmanifest" ||
+    /^\/(icon|apple-icon|apple-splash)[^/]*\.(png|svg)$/.test(url.pathname) ||
+    /\.(woff2?|ttf)$/.test(url.pathname)
+  );
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET" || !request.url.startsWith(self.location.origin)) {
     return;
   }
 
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      })
-      .catch(() =>
-        caches.match(request).then((cached) => {
-          if (cached) return cached;
-          if (request.mode === "navigate") return caches.match(OFFLINE_URL);
-          return new Response("Nema neta, nema šanka.", {
-            status: 503,
-            headers: { "Content-Type": "text/plain; charset=utf-8" },
-          });
-        })
+  const url = new URL(request.url);
+
+  // Next router RSC/prefetch promet ide direktno na mrežu — presretanje
+  // i lažni odgovori rušili bi klijentsku navigaciju u puni reload
+  if (
+    url.searchParams.has("_rsc") ||
+    request.headers.get("RSC") ||
+    request.headers.get("Next-Router-Prefetch")
+  ) {
+    return;
+  }
+
+  // Cache-first za immutable statiku — jedini sadržaj koji smije živjeti
+  // u cacheu bez pitanja (hash u imenu = nikad se ne mijenja)
+  if (isStaticAsset(url)) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ||
+          fetch(request).then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              caches.open(CACHE).then((cache) => cache.put(request, copy));
+            }
+            return response;
+          })
       )
-  );
+    );
+    return;
+  }
+
+  // Navigacije: network-first, offline fallback na zadnju viđenu stranicu
+  // pa na offline.html
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches
+            .match(request)
+            .then((cached) => cached || caches.match(OFFLINE_URL))
+        )
+    );
+    return;
+  }
+
+  // Sve ostalo (API pozivi, slike s drugim headerima...) ne diramo —
+  // browser i HTTP cache rade svoj posao
 });

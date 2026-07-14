@@ -15,6 +15,7 @@ import {
 } from "@/app/actions";
 import Avatar from "./avatar";
 import PhotoLightbox from "./photo-lightbox";
+import PhotoEditor from "./photo-editor";
 import ReactionBar, { toggleReaction } from "./reaction-bar";
 import CommentThread from "./comment-thread";
 import BadgeToast from "./badge-toast";
@@ -30,6 +31,15 @@ const timeFmt = new Intl.DateTimeFormat("hr-HR", {
 const PHOTO_MAX_SIDE = 1024;
 const THUMB_MAX_SIDE = 320;
 const NAJAVA_TRAJANJE_MS = 45 * 60 * 1000;
+
+// Makni jedan red (po id-u) iz mape stanja — isti obrazac za rows i drinks
+function removeRow(setMap, id) {
+  setMap((prev) => {
+    const next = { ...prev };
+    delete next[id];
+    return next;
+  });
+}
 
 export default function Sank({
   groupId,
@@ -75,8 +85,12 @@ export default function Sank({
   const [error, setError] = useState(null);
   const [badgeQueue, setBadgeQueue] = useState([]);
   const [askPhoto, setAskPhoto] = useState(false);
+  const [editorFile, setEditorFile] = useState(null); // slika koja čeka pregled/tekst
   const [lightbox, setLightbox] = useState(null); // { url, caption }
   const [isPending, startTransition] = useTransition();
+  // Koja akcija je u tijeku ("checkin" | "cancel" | "najava") — da
+  // "Sekunda..." piše samo na stisnutom gumbu, ne na svima odjednom
+  const [pendingAction, setPendingAction] = useState(null);
   const cameraRef = useRef(null);
   const geoRef = useRef(null); // promise pokrenut na klik, awaita se pri checkinu
   const previewUrlRef = useRef(null); // object URL lokalnog previewa, čeka se pravi red pa se revoke-a
@@ -138,11 +152,7 @@ export default function Sank({
         { event: "*", schema: "public", table: "drinks", filter: groupFilter },
         (payload) => {
           if (payload.eventType === "DELETE") {
-            setDrinks((prev) => {
-              const next = { ...prev };
-              delete next[payload.old.id];
-              return next;
-            });
+            removeRow(setDrinks, payload.old.id);
             return;
           }
           setDrinks((prev) => ({ ...prev, [payload.new.id]: payload.new }));
@@ -192,11 +202,7 @@ export default function Sank({
         r.checked_in_at >= dayStartIso
     );
     if (!hasReal) return;
-    setRows((prev) => {
-      const next = { ...prev };
-      delete next[tmpKey];
-      return next;
-    });
+    removeRow(setRows, tmpKey);
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = null;
@@ -327,11 +333,7 @@ export default function Sank({
     );
     if (result?.error) {
       setError(result.error);
-      setRows((prev) => {
-        const next = { ...prev };
-        delete next[tmpKey];
-        return next;
-      });
+      removeRow(setRows, tmpKey);
       return false;
     }
     if (result?.newBadges?.length) {
@@ -343,6 +345,7 @@ export default function Sank({
   function doCheckIn(photoUrl) {
     setAskPhoto(false);
     setError(null);
+    setPendingAction("checkin");
     const tmpKey = `tmp-${currentUserId}`;
     // Optimistički temp red ODMAH — pravi stiže realtimeom (derivacija je po
     // korisniku pa duplikat ne smeta, efekt gore ga makne kad stigne pravi)
@@ -365,10 +368,12 @@ export default function Sank({
   // TU SAM prvo otvara kameru — slika je dokaz i objava dana
   function handleCheckInClick() {
     setError(null);
+    setPendingAction("checkin");
     geoRef.current = requestLocation();
     cameraRef.current?.click();
   }
 
+  // Slika prvo ide u editor (pregled + opcionalni tekst), upload tek na Objavi
   function handlePhoto(e) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -378,15 +383,32 @@ export default function Sank({
     }
     setError(null);
     setAskPhoto(false);
+    setEditorFile(file);
+  }
+
+  function handleEditorRetake() {
+    setEditorFile(null);
+    handleCheckInClick();
+  }
+
+  function handleEditorCancel() {
+    setEditorFile(null);
+    setPendingAction(null);
+  }
+
+  // Objava iz editora: bake teksta u sliku pa postojeći upload pipeline
+  function handleEditorPublish(overlay) {
+    const file = editorFile;
+    setEditorFile(null);
+    if (!file) return;
     const tmpKey = `tmp-${currentUserId}`;
     startTransition(async () => {
       try {
         // Kompresija je brza (canvas) — čim imamo blob, pokaži se u listi
         // odmah s lokalnim previewom; upload i checkin idu u pozadini.
-        const [blob, thumbBlob] = await Promise.all([
-          downscaleToBlob(file, PHOTO_MAX_SIDE),
-          downscaleToBlob(file, THUMB_MAX_SIDE, 0.8),
-        ]);
+        // Thumb se radi iz već pečenog bloba da i on nosi tekst.
+        const blob = await downscaleToBlob(file, PHOTO_MAX_SIDE, 0.85, overlay);
+        const thumbBlob = await downscaleToBlob(blob, THUMB_MAX_SIDE, 0.8);
         const previewUrl = URL.createObjectURL(blob);
         previewUrlRef.current = previewUrl;
         setRows((prev) => ({
@@ -424,11 +446,7 @@ export default function Sank({
         const ok = await submitCheckIn(data.publicUrl, thumbPublicUrl, tmpKey);
         if (!ok) setAskPhoto(true);
       } catch {
-        setRows((prev) => {
-          const next = { ...prev };
-          delete next[tmpKey];
-          return next;
-        });
+        removeRow(setRows, tmpKey);
         if (previewUrlRef.current) {
           URL.revokeObjectURL(previewUrlRef.current);
           previewUrlRef.current = null;
@@ -441,6 +459,7 @@ export default function Sank({
 
   function handleNajava() {
     setError(null);
+    setPendingAction("najava");
     startTransition(async () => {
       const result = await najaviDolazak();
       if (result?.error) {
@@ -473,6 +492,7 @@ export default function Sank({
 
   function handleCancel() {
     setError(null);
+    setPendingAction("cancel");
     startTransition(async () => {
       const result = await cancelCheckIn();
       if (result?.error) {
@@ -511,11 +531,7 @@ export default function Sank({
       const result = await logDrink(drinkType);
       if (result?.error) {
         setError(result.error);
-        setDrinks((prev) => {
-          const next = { ...prev };
-          delete next[tmpId];
-          return next;
-        });
+        removeRow(setDrinks, tmpId);
         return;
       }
       if (result?.newBadges?.length) {
@@ -588,7 +604,11 @@ export default function Sank({
             : "pressable mt-6 flex h-40 w-full items-center justify-center rounded-hero bg-accent font-display text-6xl uppercase tracking-wide text-black shadow-glow disabled:opacity-50"
         }
       >
-        {iAmPresent ? "Tu si, legendo" : isPending ? "Sekunda..." : "Tu sam"}
+        {iAmPresent
+          ? "Tu si, legendo"
+          : isPending && pendingAction === "checkin"
+            ? "Sekunda..."
+            : "Tu sam"}
       </button>
 
       {iAmPresent && (
@@ -598,7 +618,7 @@ export default function Sank({
           disabled={isPending}
           className="pressable-soft mt-3 flex h-12 w-full items-center justify-center rounded-button border border-danger/30 bg-danger/10 font-display text-lg uppercase tracking-wide text-danger disabled:opacity-50"
         >
-          {isPending ? "Sekunda..." : "Ipak bježim"}
+          {isPending && pendingAction === "cancel" ? "Sekunda..." : "Ipak bježim"}
         </button>
       )}
 
@@ -621,7 +641,7 @@ export default function Sank({
         >
           {iAmArriving
             ? "Najavljen si. Sad dođi."
-            : isPending
+            : isPending && pendingAction === "najava"
               ? "Sekunda..."
               : "Stižem."}
         </button>
@@ -675,7 +695,9 @@ export default function Sank({
 
         {present.length === 0 && (
           <p className="mt-4 text-sm text-muted">
-            Nikoga. Šank zjapi prazan, sram vas sve bilo.
+            {arriving.length + fled.length > 0
+              ? "Nitko još nije sjeo. Najave su jeftine."
+              : "Nikoga. Šank zjapi prazan, sram vas sve bilo."}
           </p>
         )}
 
@@ -708,8 +730,8 @@ export default function Sank({
                     {(p.drinkCount > 0 || p.spinDrink) && (
                       <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted">
                         {p.drinkCount > 0 && <span>🍺 {p.drinkCount}</span>}
-                        {p.spinDrink && (
-                          <span>🎡 {drinkInfo(p.spinDrink)?.label}</span>
+                        {drinkInfo(p.spinDrink) && (
+                          <span>🎡 {drinkInfo(p.spinDrink).label}</span>
                         )}
                       </span>
                     )}
@@ -806,6 +828,15 @@ export default function Sank({
           ))}
         </ul>
       </section>
+
+      {editorFile && (
+        <PhotoEditor
+          file={editorFile}
+          onPublish={handleEditorPublish}
+          onRetake={handleEditorRetake}
+          onCancel={handleEditorCancel}
+        />
+      )}
 
       <PhotoLightbox
         url={lightbox?.url}

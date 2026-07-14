@@ -31,7 +31,7 @@ export default function ResetLozinkaPage() {
       return;
     }
     if (password !== confirm) {
-      setState({ error: "Lozinke se ne poklapaju. Otriježni se pa probaj opet." });
+      setState({ error: "Lozinke se ne poklapaju. Otrijezni se pa probaj opet." });
       return;
     }
 

@@ -58,12 +58,15 @@ export default async function Home() {
     new Date(Date.UTC(monthYear, monthNum - 1, 1, 12))
   ).toISOString();
 
+  const najavaCutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString();
   const [
     { data: profiles },
     { data: checkins },
     allCheckins,
     { data: drinks },
     { data: spins },
+    { count: monthDrinkCount },
+    { data: najave },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -89,13 +92,17 @@ export default async function Home() {
       .select("id, user_id, result, created_at")
       .eq("group_id", active.id)
       .gte("created_at", dayStart.toISOString()),
+    supabase
+      .from("drinks")
+      .select("id", { count: "exact", head: true })
+      .eq("group_id", active.id)
+      .gte("logged_at", monthStartIso),
+    supabase
+      .from("najave")
+      .select("id, user_id, created_at")
+      .eq("group_id", active.id)
+      .gte("created_at", najavaCutoff),
   ]);
-
-  const { count: monthDrinkCount } = await supabase
-    .from("drinks")
-    .select("id", { count: "exact", head: true })
-    .eq("group_id", active.id)
-    .gte("logged_at", monthStartIso);
 
   // Statistika unutar grupe kreće od ulaska u grupu (za staru ekipu = registracija)
   const allProfiles = (profiles ?? []).map((p) => ({
@@ -104,23 +111,14 @@ export default async function Home() {
   }));
   const usernames = Object.fromEntries(allProfiles.map((p) => [p.id, p.username]));
 
-  // Reakcije za današnje slike + žive najave — najave ne ovise o reactionIds
-  // pa idu paralelno u istom valu
+  // Reakcije ovise o ID-jevima današnjih checkina pa moraju u drugi val
   const reactionIds = [...new Set((checkins ?? []).map((c) => c.id))];
-  const najavaCutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString();
-  const [{ data: reactionRows }, { data: najave }] = await Promise.all([
-    reactionIds.length
-      ? supabase
-          .from("reactions")
-          .select("checkin_id, user_id, emoji")
-          .in("checkin_id", reactionIds)
-      : Promise.resolve({ data: [] }),
-    supabase
-      .from("najave")
-      .select("id, user_id, created_at")
-      .eq("group_id", active.id)
-      .gte("created_at", najavaCutoff),
-  ]);
+  const { data: reactionRows } = reactionIds.length
+    ? await supabase
+        .from("reactions")
+        .select("checkin_id, user_id, emoji")
+        .in("checkin_id", reactionIds)
+    : { data: [] };
 
   const reactionsByCheckin = {};
   for (const r of reactionRows ?? []) {

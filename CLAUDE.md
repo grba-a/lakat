@@ -8,6 +8,7 @@ danas grupa preimenovana u "beta" jer se aplikacija otvara novim korisnicima).
 Korisnici se registriraju, klikom na gumb "TU SAM" označe da su prisutni za šankom.
 Ostali ih vide na popisu u realtimeu. Tko ne dolazi, javno je posramljen kao "pička mjeseca".
 Ton aplikacije je vulgaran i zajebantski — to je feature, ne bug. Copy piši na hrvatskom, slobodno bezobrazno.
+Jezične konvencije copyja: "pjanac/pjanci" (dubrovački, NE "pijanac"), bez engleskog "checkirati" (domaće: "za šankom", "sjeo za šank"), linkovi za prijavu su "Prijavi se", loading tekst "Sekunda...".
 
 Aplikacija je **multi-tenant**: korisnik može biti član do 3 grupe, svaka grupa ima svoje ime i lozinku
 (hashirano u bazi, provjera isključivo server-side), sve što se vidi (checkini, statistika, mapa) je
@@ -17,12 +18,12 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
 - Next.js 16+, App Router, JavaScript (.jsx), NE TypeScript
 - Tailwind CSS v4 (tema u `app/globals.css`, nema `tailwind.config.js`)
 - Supabase: auth (email + lozinka), Postgres, Realtime, Storage
-- Hosting: Vercel (laktarenje.com)
-- PWA: manifest + service worker, instalacija na home screen
-- Middleware fajl se zove `proxy.js` (Next 16 preimenovanje middleware→proxy)
+- Hosting: Vercel (laktarenje.com), funkcije u regiji **fra1** (`vercel.json` — korisnici i Supabase su u EU, ne mijenjati)
+- PWA: manifest + service worker, instalacija na home screen. SW (`public/sw.js`, cache "lakat-v4"): RSC/prefetch zahtjeve (`_rsc`, `RSC` header) NE presreće (sintetski odgovori tjeraju Next router na puni reload!), `/_next/static/`+ikone+fontovi su cache-first, navigacije network-first s offline fallbackom, ostalo se ne dira
+- Middleware fajl se zove `proxy.js` (Next 16 preimenovanje middleware→proxy); u njemu se auth provjerava s `getClaims()` (lokalna JWT validacija), NE `getUser()` (mrežni roundtrip po requestu)
 
 ## Pravila igre (poslovna logika)
-1. **Check-in**: korisnik klikne "TU SAM" → upisuje se red u `checkins` s timestampom.
+1. **Check-in**: korisnik klikne "TU SAM" → kamera → slika ide u **photo editor** (`photo-editor.jsx`: pregled + opcionalni IG-story tekst, 4 stila, drag pozicija; tekst se peče canvasom u JPEG prije uploada, thumb se radi iz pečenog bloba) → "Objavi" upisuje red u `checkins` s timestampom.
 2. **Status "prisutan"**: korisnik je prisutan ako ima checkin NAKON danas u 06:00 po Europe/Zagreb.
    Prije 06:00 gleda se jučerašnjih 06:00 (noć traje do 6 ujutro). Nema crona, sve se računa iz timestampa.
 3. **Default stanje**: tko nije prisutan, taj je pička. Nema aktivnog gumba "pička".
@@ -46,7 +47,7 @@ Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `s
 - `reactions`: checkin_id, user_id, emoji (unique po user/checkin)
 - `najave`: "stižem" najave dolaska
 - `push_subscriptions`: user_id, subscription (jsonb), created_at
-- `drinks`: beer log — id, user_id, group_id, drink_type, logged_at. Redni broj pića se ne sprema, derivira se brojanjem redova po lakat-danu. Lista pića je u `lib/drinks.js` (DRINK_TYPES, uklj. pelin od `supabase-pica3.sql`); zadnje danas logirano piće je ujedno marker korisnika na mapi (fallback: random emoji stabilan po danu). `profiles.map_emoji` postoji u bazi ali je DEPRECATED — picker je maknut, kolona se ne koristi.
+- `drinks`: beer log — id, user_id, group_id, drink_type, logged_at. Redni broj pića se ne sprema, derivira se brojanjem redova po lakat-danu. Lista pića je u `lib/drinks.js` (DRINK_TYPES, uklj. pelin od `supabase-pica3.sql`; **"sot" je maknut iz ponude** — ključ ostaje u DB constraintima zbog starih redova, `drinkInfo("sot")` vraća null pa prikazi moraju biti null-safe; rakija nosi ⚡); zadnje danas logirano piće je ujedno marker korisnika na mapi (fallback: random emoji stabilan po danu). `profiles.map_emoji` postoji u bazi ali je DEPRECATED — picker je maknut, kolona se ne koristi.
 - `kolo_spins`: kolo "Piće dana" — id, user_id, group_id, result, created_at. Rezultat bira ISKLJUČIVO server (spinKolo akcija), nema client insert policyja. Max 1 spin po lakat-danu PO KORISNIKU (bez obzira na grupu), bez check-in uvjeta; ikona u headeru (kolo-icon.jsx) nestaje nakon spina do 06:00. Kolo se vrti povlačenjem prsta (nema tipke), fullscreen neprozirni overlay, X za zatvoriti; spin NE šalje push (namjerno maknuto). Rezultat kola je samo prijedlog dana — ne utječe na mapu.
 
 RLS je uključen i grupno-scopan (`is_member(group_id)`, `shares_group_with(id)` helper funkcije). Sva pisanja u `groups`/`group_members` idu isključivo kroz service-role admin klijent (`lib/supabase/admin.js`), nema client insert/update policyja na tim tablicama.

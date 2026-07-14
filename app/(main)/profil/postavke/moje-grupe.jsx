@@ -241,7 +241,11 @@ function GroupCard({ group, myId, onAction }) {
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
             {group.role === "admin" ? "Ti si gazda" : "Član"} ·{" "}
             {group.members.length}{" "}
-            {group.members.length === 1 ? "član" : "člana"}
+            {group.members.length === 1
+              ? "član"
+              : group.members.length <= 4
+                ? "člana"
+                : "članova"}
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-1.5">

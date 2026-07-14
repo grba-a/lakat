@@ -75,55 +75,72 @@ export default function PushToggle({ vapidPublicKey }) {
     });
   }
 
+  const toggleable = status === "off" || status === "on";
+  const isOn = status === "on";
+
   return (
     <section className="mt-10">
       <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
         Obavijesti
       </h2>
 
-      {status === "loading" && (
-        <p className="mt-4 text-sm text-muted">Provjeravam...</p>
-      )}
+      <div className="surface-2 mt-4 flex items-center gap-3 rounded-card px-4 py-4">
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+            isOn ? "bg-accent/15 text-accent" : "bg-white/5 text-muted"
+          }`}
+        >
+          {/* Zvonce — isti stroke stil kao nav ikone */}
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          </svg>
+        </span>
 
-      {status === "unsupported" && (
-        <p className="mt-4 text-sm text-muted">
-          Ovaj browser ne podržava push. Na iPhoneu prvo dodaj Lakat na
-          početni zaslon (vidi upute na Šanku) pa otvori odande.
-        </p>
-      )}
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold">Obavijesti</span>
+          <span className="mt-0.5 block text-xs text-muted">
+            {status === "loading" && "Provjeravam..."}
+            {status === "unsupported" &&
+              "Ovaj browser ne podržava push. Na iPhoneu prvo dodaj Lakat na početni zaslon (vidi upute na Šanku) pa otvori odande."}
+            {status === "denied" &&
+              "Blokirao si obavijesti u postavkama browsera. Sam si to napravio, sam i odblokiraj."}
+            {status === "on" && "Javit će ti se kad netko sjedne za šank."}
+            {status === "off" && "Da znaš čim netko sjedne za šank."}
+          </span>
+        </span>
 
-      {status === "denied" && (
-        <p className="mt-4 text-sm text-muted">
-          Blokirao si obavijesti u postavkama browsera. Sam si to napravio,
-          sam i odblokiraj.
-        </p>
-      )}
-
-      {(status === "off" || status === "on") && (
-        <>
+        {(toggleable || status === "loading") && (
           <button
             type="button"
-            onClick={status === "on" ? disable : enable}
-            disabled={isPending}
-            className={
-              status === "on"
-                ? "surface-2 pressable-soft mt-4 h-14 w-full rounded-button font-display text-xl uppercase tracking-wide text-muted disabled:opacity-50"
-                : "pressable-soft mt-4 h-14 w-full rounded-button bg-accent font-display text-xl uppercase tracking-wide text-black shadow-glow disabled:opacity-50"
-            }
+            role="switch"
+            aria-checked={isOn}
+            aria-label={isOn ? "Isključi obavijesti" : "Uključi obavijesti"}
+            onClick={isOn ? disable : enable}
+            disabled={isPending || status === "loading"}
+            className={`pressable-soft relative h-8 w-14 shrink-0 rounded-full transition-colors duration-200 after:absolute after:-inset-2 after:content-[''] disabled:opacity-50 ${
+              isOn ? "bg-accent" : "bg-white/10"
+            }`}
+            style={{ touchAction: "manipulation" }}
           >
-            {isPending
-              ? "Sekunda..."
-              : status === "on"
-                ? "Isključi obavijesti"
-                : "Uključi obavijesti"}
+            <span
+              className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow-soft transition-[left] duration-200 ${
+                isOn ? "left-7" : "left-1"
+              }`}
+            />
           </button>
-          <p className="mt-2 text-xs text-muted">
-            {status === "on"
-              ? "Javit će ti se kad netko sjedne za šank."
-              : "Da znaš čim netko sjedne za šank."}
-          </p>
-        </>
-      )}
+        )}
+      </div>
 
       {error && (
         <p className="mt-3 rounded-card border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-bold text-danger">

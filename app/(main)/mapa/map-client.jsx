@@ -143,7 +143,7 @@ export default function MapClient({
       <MapView markers={markers} />
       {markers.length === 0 ? (
         <p className="mt-4 text-sm text-muted">
-          Nitko se danas još nije checkirao s lokacijom. Karta zjapi prazna
+          Nitko se danas još nije javio s lokacijom. Karta zjapi prazna
           ko šank u ponedjeljak.
         </p>
       ) : (
@@ -156,7 +156,7 @@ export default function MapClient({
             >
               <span className="text-base">{m.emoji}</span>
               <span className="font-bold text-foreground">{m.username}</span>
-              <span>· checkiran u {m.time}</span>
+              <span>· za šankom od {m.time}</span>
             </li>
           ))}
         </ul>

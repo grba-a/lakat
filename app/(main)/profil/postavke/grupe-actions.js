@@ -201,7 +201,7 @@ export async function joinGroup(prevState, formData) {
     return { error: `Provjera nije prošla: ${verifyError.message}` };
   }
   if (!gid) {
-    return { error: "Ta grupa ne postoji ili si fulao šifru. Otriježni se." };
+    return { error: "Ta grupa ne postoji ili si fulao šifru. Otrijezni se." };
   }
 
   const existing = await membershipOf(admin, gid, user.id);
@@ -242,7 +242,7 @@ export async function createGroup(prevState, formData) {
     return { error: "Šifra grupe mora imati bar 4 znaka." };
   }
   if (groupPassword !== groupConfirm) {
-    return { error: "Šifre se ne poklapaju. Otriježni se pa probaj opet." };
+    return { error: "Šifre se ne poklapaju. Otrijezni se pa probaj opet." };
   }
 
   const admin = createAdminClient();
@@ -363,7 +363,7 @@ export async function renameGroup(groupId, prevState, formData) {
   }
 
   revalidatePath("/", "layout");
-  return { ok: true, message: "Novo ime, isti pijanci." };
+  return { ok: true, message: "Novo ime, isti pjanci." };
 }
 
 export async function changeGroupPassword(groupId, prevState, formData) {
@@ -375,7 +375,7 @@ export async function changeGroupPassword(groupId, prevState, formData) {
     return { error: "Šifra grupe mora imati bar 4 znaka." };
   }
   if (password !== confirm) {
-    return { error: "Šifre se ne poklapaju. Otriježni se pa probaj opet." };
+    return { error: "Šifre se ne poklapaju. Otrijezni se pa probaj opet." };
   }
 
   const admin = createAdminClient();

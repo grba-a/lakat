@@ -2,17 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 // Slike koraka: ubaci ih u /public/upute/ pod ovim imenima.
-// Dok ne postoje, prikazuje se vidljivi placeholder.
+// Dok ne postoje, korak se prikazuje bez slike (tekst je dovoljan).
 function StepImage({ file, alt }) {
   const exists = fs.existsSync(path.join(process.cwd(), "public", "upute", file));
 
-  if (!exists) {
-    return (
-      <div className="flex aspect-[9/16] max-h-72 w-full items-center justify-center rounded-card border border-dashed border-white/15 bg-white/[0.03] px-4 text-center text-xs text-muted">
-        Slika stiže — ubaci {file} u /public/upute/
-      </div>
-    );
-  }
+  if (!exists) return null;
 
   return (
     // eslint-disable-next-line @next/next/no-img-element

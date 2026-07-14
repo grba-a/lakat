@@ -45,7 +45,7 @@ export default function JoinGroupCard() {
         Nisi u grupi
       </h2>
       <p className="mt-2 text-sm text-muted">
-        Da vidiš tko je za šankom i da se checkiraš, uđi u grupu.
+        Da vidiš tko je za šankom i da sjedneš za šank, uđi u grupu.
       </p>
 
       {/* Primarno: javna BETA, bez šifre */}
