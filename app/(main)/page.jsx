@@ -15,7 +15,6 @@ import {
   lastDayOfMonth,
 } from "@/lib/stats";
 import Sank from "./sank";
-import Memorije from "./memorije";
 import Flashbacks from "./flashbacks";
 import InstallHint from "./install-hint";
 import JoinGroupCard from "./join-group-card";
@@ -139,11 +138,7 @@ export default async function Home() {
     titles[p.id] = titleFor(current, losers.some((l) => l.id === p.id));
   }
 
-  // Slike dana: dokazne slike iz današnjih check-inova, najnovije prve
-  const memoryItems = (checkins ?? [])
-    .filter((c) => c.photo_url)
-    .sort((a, b) => new Date(b.checked_in_at) - new Date(a.checked_in_at))
-    .map((m) => ({ ...m, username: usernames[m.user_id] ?? "Netko" }));
+  // Slike dana renderira Sank (realtime rows) — ovdje se više ne deriviraju
 
   // Wrapped banner: zadnja 3 dana tekućeg mjeseca (recap koji se puni) ili
   // prva 3 dana idućeg (recap prošlog, netom zaključenog mjeseca)
@@ -172,13 +167,6 @@ export default async function Home() {
         monthDrinkCount={monthDrinkCount ?? 0}
       />
       {wrappedMonthKey && <WrappedBanner monthKey={wrappedMonthKey} />}
-      <Memorije
-        key={`memorije-${active.id}`}
-        items={memoryItems}
-        flashbacks={[]}
-        myId={user.id}
-        initialReactions={reactionsByCheckin}
-      />
       <Suspense fallback={null}>
         <Flashbacks groupId={active.id} usernames={usernames} myId={user.id} />
       </Suspense>

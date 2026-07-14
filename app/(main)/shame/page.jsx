@@ -152,6 +152,10 @@ export default async function ShamePage() {
 
   const monthView = (
     <>
+      <p className="mt-6 text-xs text-muted">
+        Inventar mjeseca dolazi najviše, pička mjeseca najmanje. Matematika je
+        nemilosrdna.
+      </p>
       <section className="mt-8">
         <h1 className="text-xs font-bold uppercase tracking-widest text-danger">
           Pička mjeseca (zasad)

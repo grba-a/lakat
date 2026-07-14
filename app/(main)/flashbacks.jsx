@@ -63,7 +63,6 @@ export default async function Flashbacks({ groupId, usernames, myId }) {
 
   return (
     <Memorije
-      items={[]}
       flashbacks={items}
       myId={myId}
       initialReactions={reactionsByCheckin}

@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { BADGE_DEFS } from "@/lib/badges";
+import BadgesList from "./badges-list";
 
 // Osvojeni u boji, neosvojeni-ali-vidljivi zasivljeni, skriveni bedževi
 // potpuno izostavljeni dok se ne otključaju (iznenađenje, ne placeholder).
+// Prikaz je sklopiv (badges-list.jsx) — otključani prvi.
 export default async function BadgesGrid({ userId, groupId }) {
   const supabase = await createClient();
   const { data } = await supabase
@@ -16,36 +18,23 @@ export default async function BadgesGrid({ userId, groupId }) {
 
   if (!visible.length) return null;
 
+  // Otključani prvi (stabilno unutar obje polovice)
+  const badges = [
+    ...visible.filter((b) => earned.has(b.key)),
+    ...visible.filter((b) => !earned.has(b.key)),
+  ].map((b) => ({
+    key: b.key,
+    label: b.label,
+    description: b.description,
+    got: earned.has(b.key),
+  }));
+
   return (
     <section className="mt-10">
       <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
         Bedževi
       </h2>
-      <div className="stagger mt-4 grid grid-cols-3 gap-2">
-        {visible.map((badge, i) => {
-          const got = earned.has(badge.key);
-          return (
-            <div
-              key={badge.key}
-              className={`rounded-card border px-3 py-4 text-center ${
-                got
-                  ? "border-accent/40 bg-accent/10"
-                  : "border-white/10 bg-white/[0.03] opacity-40"
-              }`}
-              style={{ "--stagger-i": Math.min(i, 8) }}
-            >
-              <p
-                className={`font-display text-sm uppercase leading-tight tracking-wide ${
-                  got ? "text-accent" : "text-muted"
-                }`}
-              >
-                {badge.label}
-              </p>
-              <p className="mt-1 text-[10px] text-muted">{badge.description}</p>
-            </div>
-          );
-        })}
-      </div>
+      <BadgesList badges={badges} />
     </section>
   );
 }

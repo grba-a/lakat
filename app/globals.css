@@ -200,6 +200,15 @@ input,
   background: rgba(74, 222, 128, 0.7);
 }
 
+/* Bez scrollbara — za swipe carousel track u lightboxu (globalni zeleni
+   scrollbar bi virio ispod slajdova) */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Atmosfera — statični sjaj da blur ima što mutiti; ne smije na wrapper
    jer bi filter na pretku razbio fixed nav na iOS Safariju */
 body::before {

@@ -66,7 +66,7 @@ export default function Sank({
     getCurrentDayStart().toISOString()
   );
   const [error, setError] = useState(null);
-  const [lightbox, setLightbox] = useState(null); // { url, caption, checkinId }
+  const [lightbox, setLightbox] = useState(null); // { items: [{url, caption, checkinId}], startIndex }
   const [isPending, startTransition] = useTransition();
 
   // Realtime: sve filtrirano po aktivnoj grupi (RLS to čuva i na serveru);
@@ -209,6 +209,21 @@ export default function Sank({
     return { present, arriving, incomingByTarget };
   }, [profiles, rows, najave, drinks, now, dayStartIso]);
 
+  // Slike dana grupirane PO KORISNIKU: [{ userId, photos }] — photos newest
+  // first, grupe poredane po najnovijoj slici. Živi na Sankovom realtimeu
+  // (rows), pa nova slika uskače bez refresha.
+  const memoryGroups = useMemo(() => {
+    const sorted = Object.values(rows)
+      .filter((r) => r.photo_url && !r.cancelled_at && r.checked_in_at >= dayStartIso)
+      .sort((a, b) => b.checked_in_at.localeCompare(a.checked_in_at));
+    const byUser = new Map();
+    for (const r of sorted) {
+      if (!byUser.has(r.user_id)) byUser.set(r.user_id, []);
+      byUser.get(r.user_id).push(r);
+    }
+    return [...byUser.entries()].map(([userId, photos]) => ({ userId, photos }));
+  }, [rows, dayStartIso]);
+
   const iAmPresent = present.some((p) => p.id === currentUserId);
   const iAmArriving = arriving.some((p) => p.id === currentUserId);
   const presentIds = useMemo(() => new Set(present.map((p) => p.id)), [present]);
@@ -273,9 +288,28 @@ export default function Sank({
     e.preventDefault();
     e.stopPropagation();
     setLightbox({
-      url: p.photoUrl,
-      caption: `${p.username} · ${timeFmt.format(new Date(p.arrivedAt))}`,
-      checkinId: typeof p.checkinId === "number" ? p.checkinId : null,
+      items: [
+        {
+          url: p.photoUrl,
+          caption: `${p.username} · ${timeFmt.format(new Date(p.arrivedAt))}`,
+          checkinId: typeof p.checkinId === "number" ? p.checkinId : null,
+        },
+      ],
+      startIndex: 0,
+    });
+  }
+
+  // Tap na grupirani tile: fullscreen carousel kroz sve današnje slike
+  // tog korisnika (najnovija prva)
+  function openMemories(group) {
+    const username = usernameById.get(group.userId) ?? "Netko";
+    setLightbox({
+      items: group.photos.map((p) => ({
+        url: p.photo_url,
+        caption: `${username} · ${timeFmt.format(new Date(p.checked_in_at))}`,
+        checkinId: p.id,
+      })),
+      startIndex: 0,
     });
   }
 
@@ -285,6 +319,15 @@ export default function Sank({
 
   return (
     <div className="flex flex-1 flex-col">
+      {!iAmPresent && (
+        <div className="mt-4 rounded-card border border-accent/25 bg-accent/[0.06] px-4 py-3 text-center">
+          <p className="text-sm font-bold">Slikaj dokaz i sjedni za šank.</p>
+          <p className="mt-1 text-xs text-muted">
+            Stisni zeleni plus dolje. Nemoj se izgubiti. ↓
+          </p>
+        </div>
+      )}
+
       {error && (
         <p className="mt-4 rounded-card border border-danger/30 bg-danger/10 px-4 py-3 text-sm font-bold text-danger">
           {error}
@@ -435,24 +478,77 @@ export default function Sank({
         </ul>
       </section>
 
+      {memoryGroups.length > 0 && (
+        <section className="mt-12">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
+            Slike dana
+          </h2>
+          <div className="stagger mt-4 grid grid-cols-3 gap-2">
+            {memoryGroups.map((group, i) => {
+              const username = usernameById.get(group.userId) ?? "Netko";
+              const cover = group.photos[0];
+              const reactionCount = group.photos.reduce(
+                (n, p) => n + (reactions[p.id]?.length ?? 0),
+                0
+              );
+              return (
+                <div key={group.userId} style={{ "--stagger-i": Math.min(i, 8) }}>
+                  <button
+                    type="button"
+                    onClick={() => openMemories(group)}
+                    className="pressable relative aspect-square w-full overflow-hidden rounded-card border border-white/10"
+                    aria-label={`Slike dana: ${username} (${group.photos.length})`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={cover.thumb_url ?? cover.photo_url}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover"
+                    />
+                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-4 text-left text-[10px] font-bold uppercase tracking-wider text-foreground">
+                      {username} · {timeFmt.format(new Date(cover.checked_in_at))}
+                    </span>
+                    {group.photos.length > 1 && (
+                      <span className="absolute left-1.5 top-1.5 rounded-full border border-white/10 bg-black/70 px-1.5 text-[10px] font-bold leading-4 text-foreground">
+                        {group.photos.length} 📸
+                      </span>
+                    )}
+                    {reactionCount > 0 && (
+                      <span className="absolute right-1.5 top-1.5 rounded-full border border-white/10 bg-black/70 px-1.5 text-[10px] font-bold leading-4 text-foreground">
+                        {reactionCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       <PhotoLightbox
-        url={lightbox?.url}
-        caption={lightbox?.caption}
+        items={lightbox?.items}
+        startIndex={lightbox?.startIndex ?? 0}
         onClose={() => setLightbox(null)}
       >
-        {lightbox?.checkinId && (
-          <div className="flex flex-col items-center gap-4">
-            <ReactionBar
-              rows={reactions[lightbox.checkinId] ?? []}
-              myId={currentUserId}
-              onToggle={(emoji) => handleReaction(lightbox.checkinId, emoji)}
-            />
-            <CommentThread
-              checkinId={lightbox.checkinId}
-              currentUserId={currentUserId}
-            />
-          </div>
-        )}
+        {(current) =>
+          current?.checkinId && (
+            <div className="flex flex-col items-center gap-4">
+              <ReactionBar
+                rows={reactions[current.checkinId] ?? []}
+                myId={currentUserId}
+                onToggle={(emoji) => handleReaction(current.checkinId, emoji)}
+              />
+              <CommentThread
+                key={current.checkinId}
+                checkinId={current.checkinId}
+                currentUserId={currentUserId}
+              />
+            </div>
+          )
+        }
       </PhotoLightbox>
     </div>
   );
