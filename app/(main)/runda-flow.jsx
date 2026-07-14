@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { downscaleToBlob } from "@/lib/image";
 import { checkIn, logDrink, undoLastDrink } from "@/app/actions";
@@ -184,6 +185,9 @@ export default function RundaFlow({ userId }) {
 
   const toastDrink = drinkInfo(drinkToast);
 
+  // Overlayi idu portalom u <body>: komponenta živi u navbaru čiji
+  // glass-nav ima backdrop-filter, a taj je containing block za fixed
+  // potomke — bez portala bi se editor/kolo renderirali UNUTAR pilule
   return (
     <>
       <PlusButton onClick={openCamera} disabled={publishing} />
@@ -196,6 +200,13 @@ export default function RundaFlow({ userId }) {
         className="hidden"
       />
 
+      {createPortal(overlays(), document.body)}
+    </>
+  );
+
+  function overlays() {
+    return (
+    <>
       <BadgeToast
         queue={badgeQueue}
         onDone={(key) =>
@@ -295,5 +306,6 @@ export default function RundaFlow({ userId }) {
         </button>
       )}
     </>
-  );
+    );
+  }
 }
