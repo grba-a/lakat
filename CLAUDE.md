@@ -23,7 +23,7 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
 - Middleware fajl se zove `proxy.js` (Next 16 preimenovanje middleware→proxy); u njemu se auth provjerava s `getClaims()` (lokalna JWT validacija), NE `getUser()` (mrežni roundtrip po requestu)
 
 ## Pravila igre (poslovna logika)
-1. **Check-in**: korisnik klikne "TU SAM" → kamera → slika ide u **photo editor** (`photo-editor.jsx`: pregled + opcionalni IG-story tekst, 4 stila, drag pozicija; tekst se peče canvasom u JPEG prije uploada, thumb se radi iz pečenog bloba) → "Objavi" upisuje red u `checkins` s timestampom.
+1. **Runda (check-in)**: zeleni PLUS u sredini navbara (TikTok stil, `plus-button.jsx` + `runda-flow.jsx`, lazy iz `nav.jsx`) → kamera → **photo editor** (`photo-editor.jsx`: pregled + opcionalni IG-story tekst, 4 stila, drag pozicija; tekst se peče canvasom u JPEG prije uploada, thumb iz pečenog bloba) → "Objavi" upisuje red u `checkins` → **omnitrix kolo pića** (`omnitrix.jsx`: okreće se prstom 1:1, inercija + snap na segment, odabrano je pod kazaljkom, "Potvrdi" = logDrink; X preskače; NE random, potpuno neprozirni overlay). **Više rundi dnevno je dozvoljeno** — prva slika dana je check-in (jedina šalje push grupi, `isFirstToday` u checkIn akciji), svaka sljedeća je nova runda (nova slika u Slike dana + piće). Piće se logira ISKLJUČIVO kroz taj flow; undo = toast "↩ Krivi tap" (~8s) nakon zapisanog pića. Veliki gumb "TU SAM" i drink-bar više NE postoje. **"Ipak bježim" je maknut** — `cancelCheckIn` akcija ne postoji, `checkins.cancelled_at` kolona ostaje u bazi zbog starih redova (filteri `.is("cancelled_at", null)` ostaju).
 2. **Status "prisutan"**: korisnik je prisutan ako ima checkin NAKON danas u 06:00 po Europe/Zagreb.
    Prije 06:00 gleda se jučerašnjih 06:00 (noć traje do 6 ujutro). Nema crona, sve se računa iz timestampa.
 3. **Default stanje**: tko nije prisutan, taj je pička. Nema aktivnog gumba "pička".
@@ -38,22 +38,22 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
 6. **Registracija**: email, lozinka, username, ime + šifra grupe (join postojeće ili create nove). Šifra grupe je hashirana u `groups.password_hash` (pgcrypto) i provjerava se ISKLJUČIVO server-side preko `verify_group_password` RPC-a (service_role only). Nikad ne slati šifru u klijentski bundle.
 
 ## Baza (Supabase)
-Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `supabase-setup.sql` → `-avatars` → `-faza1..4` → `-grupe1.sql`. NE kreiraj migracijski framework, NE mijenjaj schemu bez pitanja — dodaj novi `supabase-*.sql` fajl po istoj konvenciji.
+Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `supabase-setup.sql` → `-avatars` → `-faza1..4` → `-grupe1.sql` → ... → `-najave2.sql`. NE kreiraj migracijski framework, NE mijenjaj schemu bez pitanja — dodaj novi `supabase-*.sql` fajl po istoj konvenciji.
 
 - `profiles`: id (uuid, FK na auth.users), username (unique), avatar_url, active_group_id, created_at
 - `checkins`: id, user_id, group_id, checked_in_at, cancelled_at, photo_url, lat, lng
 - `groups`: id, name (unique), password_hash, created_by
 - `group_members`: group_id, user_id, role (admin/member), joined_at
 - `reactions`: checkin_id, user_id, emoji (unique po user/checkin)
-- `najave`: "stižem" najave dolaska
+- `najave`: "stižem" najave dolaska; od `supabase-najave2.sql` imaju `target_user_id` (uuid, nullable) — najava cilja KONKRETNOG prisutnog (klik "👉 Stižem" na njegovoj kartici), push ide SAMO meti (`notifyUser` + `najavaTargetPushBody`), ostali vide label "Stiže kod X" + badge "👀 n stiže/stižu" na kartici mete. Nema najave dok nitko nije za šankom (nema komu). Stari redovi imaju target null → generični label "Stiže (navodno)" (isti fallback kad meta ode)
 - `push_subscriptions`: user_id, subscription (jsonb), created_at
 - `drinks`: beer log — id, user_id, group_id, drink_type, logged_at. Redni broj pića se ne sprema, derivira se brojanjem redova po lakat-danu. Lista pića je u `lib/drinks.js` (DRINK_TYPES, uklj. pelin od `supabase-pica3.sql`; **"sot" je maknut iz ponude** — ključ ostaje u DB constraintima zbog starih redova, `drinkInfo("sot")` vraća null pa prikazi moraju biti null-safe; rakija nosi ⚡); zadnje danas logirano piće je ujedno marker korisnika na mapi (fallback: random emoji stabilan po danu). `profiles.map_emoji` postoji u bazi ali je DEPRECATED — picker je maknut, kolona se ne koristi.
-- `kolo_spins`: kolo "Piće dana" — id, user_id, group_id, result, created_at. Rezultat bira ISKLJUČIVO server (spinKolo akcija), nema client insert policyja. Max 1 spin po lakat-danu PO KORISNIKU (bez obzira na grupu), bez check-in uvjeta; ikona u headeru (kolo-icon.jsx) nestaje nakon spina do 06:00. Kolo se vrti povlačenjem prsta (nema tipke), fullscreen neprozirni overlay, X za zatvoriti; spin NE šalje push (namjerno maknuto). Rezultat kola je samo prijedlog dana — ne utječe na mapu.
+- `kolo_spins`: NAPUŠTENO — random kolo "Piće dana" je zamijenjeno omnitrix odabirom pića u runda flowu (korisnik BIRA, ne random). Tablica i stari redovi ostaju u bazi, kod je ne čita niti piše; `spinKolo` akcija i `kolo-icon.jsx` su obrisani.
 
 RLS je uključen i grupno-scopan (`is_member(group_id)`, `shares_group_with(id)` helper funkcije). Sva pisanja u `groups`/`group_members` idu isključivo kroz service-role admin klijent (`lib/supabase/admin.js`), nema client insert/update policyja na tim tablicama.
 
 ## Realtime
-Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkins`/`najave`/`reactions`/`drinks`/`kolo_spins` (INSERT/UPDATE, `drinks` i reakcije i DELETE). Kad netko klikne "TU SAM" ili logira piće, popis se svima u istoj grupi osvježi bez refresha.
+Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkins`/`najave`/`reactions`/`drinks` (INSERT/UPDATE, `drinks` i reakcije i DELETE). Kad netko objavi rundu ili logira piće, popis se svima u istoj grupi osvježi bez refresha. Runda-flow NE radi optimističke redove — Šank novi red dobije realtimeom.
 
 ## Env varijable (.env.local)
 - NEXT_PUBLIC_SUPABASE_URL
@@ -61,10 +61,11 @@ Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkin
 - SUPABASE_SECRET_KEY (server-only, service role, bypass RLS — koristi se za grupne operacije)
 - CRON_SECRET (za `/api/cron/prazan-sank`)
 - VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, NEXT_PUBLIC_VAPID_PUBLIC_KEY (push)
+- LAKAT_LOCKDOWN (opcionalno): "1" = lockdown za velike radove — svi osim allowliste emailova (hardkodirana u `proxy.js`) idu na `/uskoro` ("VELIKI UPDATE DOLAZI."), /login ostaje dostupan, SVI pushevi pauzirani (guard u `lib/push.js` setupWebpush). Gašenje = obrisati env var u Vercelu + redeploy.
 
 ## Ekrani
 1. `/login` i `/register` — auth (join ili create grupu pri registraciji)
-2. `/` — glavni "Šank": veliki gumb "TU SAM", ispod realtime popis korisnika, "Slike dana"
+2. `/` — glavni "Šank": realtime popis korisnika (prisutni + "stiže kod X"), "Slike dana"; objava runde ide kroz PLUS u navbaru (dostupan na svim ekranima)
 3. `/shame` — hall of shame: trenutno stanje mjeseca + arhiva
 4. `/mapa` — Leaflet mapa check-in lokacija
 5. `/profil` i `/profil/postavke` — vlastita statistika, galerija, upravljanje grupama
@@ -73,7 +74,7 @@ Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkin
 ## Dizajn
 - Mobile first. 95% korištenja je s mobitela u kafiću, po noći.
 - Tamna tema obavezna (crna/tamno siva pozadina). Zelena za prisutne.
-- Veliki touch targeti, gumb "TU SAM" mora biti ogroman i nemoguć za promašiti pijan.
+- Veliki touch targeti — plus u navbaru i kolo pića moraju biti nemogući za promašiti pijan.
 - Minimalno ekrana, minimalno klikova. Bez nepotrebnih animacija koje troše bateriju.
 - Ako su instalirani frontend/design skillovi (frontend-design ili slično), koristi ih za vizualni identitet.
 

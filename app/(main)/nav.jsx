@@ -1,8 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import PlusButton from "./plus-button";
+
+// Cijeli flow nove runde (kamera, editor, kolo pića) učitava se lazy da
+// njegova fizika i canvas kod ne uđu u bundle svake stranice; do tada
+// placeholder izgleda identično (disabled plus)
+const RundaFlow = dynamic(() => import("./runda-flow"), {
+  ssr: false,
+  loading: () => <PlusButton disabled />,
+});
 
 const TOP_OFFSET = 24;
 const DELTA_THRESHOLD = 8;
@@ -49,7 +59,7 @@ const TABS = [
   { href: "/profil", label: "Ja", icon: "ja" },
 ];
 
-export default function Nav() {
+export default function Nav({ userId = null }) {
   const pathname = usePathname();
   const [compact, setCompact] = useState(false);
   const lastY = useRef(0);
@@ -82,6 +92,35 @@ export default function Nav() {
     };
   }, []);
 
+  function renderTab(tab) {
+    const active = pathname === tab.href;
+    return (
+      <Link
+        key={tab.href}
+        href={tab.href}
+        aria-label={tab.label}
+        className={`pressable flex h-12 flex-1 items-center justify-center rounded-full transition-colors duration-200 ${
+          active ? "bg-accent/15 text-accent" : "text-accent/45"
+        }`}
+        style={active ? { viewTransitionName: "tab-pill" } : undefined}
+      >
+        <svg
+          width="26"
+          height="26"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          {ICONS[tab.icon]}
+        </svg>
+      </Link>
+    );
+  }
+
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-40 px-5 pb-[max(env(safe-area-inset-bottom),0.75rem)]"
@@ -92,34 +131,9 @@ export default function Nav() {
           compact ? "scale-90 opacity-90" : "scale-100 opacity-100"
         }`}
       >
-        {TABS.map((tab) => {
-          const active = pathname === tab.href;
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              aria-label={tab.label}
-              className={`pressable flex h-12 flex-1 items-center justify-center rounded-full transition-colors duration-200 ${
-                active ? "bg-accent/15 text-accent" : "text-accent/45"
-              }`}
-              style={active ? { viewTransitionName: "tab-pill" } : undefined}
-            >
-              <svg
-                width="26"
-                height="26"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                {ICONS[tab.icon]}
-              </svg>
-            </Link>
-          );
-        })}
+        {TABS.slice(0, 2).map(renderTab)}
+        {userId ? <RundaFlow userId={userId} /> : <PlusButton disabled />}
+        {TABS.slice(2).map(renderTab)}
       </div>
     </nav>
   );

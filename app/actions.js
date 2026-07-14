@@ -10,12 +10,12 @@ import { notifyGroup, notifyUser } from "@/lib/push";
 import {
   checkinPushBody,
   fomoPushBody,
-  najavaPushBody,
+  najavaTargetPushBody,
   commentPushBody,
   drinkMilestonePushBody,
 } from "@/lib/push-copy";
 import { evaluateBadges } from "@/lib/badges";
-import { DRINK_TYPES, drinkInfo } from "@/lib/drinks";
+import { drinkInfo } from "@/lib/drinks";
 
 const FOMO_MIN_PRESENT = 3;
 
@@ -92,8 +92,8 @@ export async function checkIn(photoUrl, thumbUrl, coords) {
 
   const dayStart = getCurrentDayStart();
 
-  // Dupli AKTIVNI checkin u istom danu (u ovoj grupi) blokiramo i na
-  // serveru; nakon poništenja se smiješ vratiti (novi red)
+  // Više rundi dnevno je dozvoljeno (svaka runda = nova slika + piće);
+  // prva runda dana je "check-in" i jedina šalje push grupi
   const { data: existing, error: checkError } = await supabase
     .from("checkins")
     .select("id")
@@ -106,9 +106,7 @@ export async function checkIn(photoUrl, thumbUrl, coords) {
   if (checkError) {
     return { error: `Nešto je puklo: ${checkError.message}` };
   }
-  if (existing?.length) {
-    return { already: true };
-  }
+  const isFirstToday = !existing?.length;
 
   const checkedInAt = new Date().toISOString();
   const { error } = await supabase
@@ -133,7 +131,11 @@ export async function checkIn(photoUrl, thumbUrl, coords) {
     // ignoriraj: checkin je prošao, bedževi su bonus
   }
 
-  // Push ostalima iz grupe — ne smije srušiti checkin ako slanje pukne
+  // Push ostalima iz grupe — SAMO za prvu rundu dana (svaka sljedeća
+  // slika bi spamala grupu); ne smije srušiti checkin ako slanje pukne
+  if (!isFirstToday) {
+    return { ok: true, newBadges };
+  }
   try {
     const { data: profile } = await supabase
       .from("profiles")
@@ -317,13 +319,18 @@ export async function deleteComment(commentId) {
 
 const NAJAVA_TRAJANJE_MS = 45 * 60 * 1000;
 
-// "Stižem." — najava dolaska, push ekipi, istekne za 45 min
-export async function najaviDolazak() {
+// "Stižem" — najava dolaska KOD konkretnog prisutnog (klik na njegovu
+// karticu). Push ide SAMO meti, ostali vide label u appu; istekne za 45 min.
+export async function najaviDolazak(targetUserId) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  if (!targetUserId || targetUserId === user.id) {
+    return { error: "Kod koga točno stižeš?" };
+  }
 
   const { active: grupa } = await getActiveGroup(supabase, user.id);
   if (!grupa) {
@@ -344,6 +351,19 @@ export async function najaviDolazak() {
     return { error: "Već si za šankom, kamo točno stižeš?" };
   }
 
+  // Meta mora biti za šankom — stiže se KOD nekoga, ne u prazno
+  const { data: targetActive } = await supabase
+    .from("checkins")
+    .select("id")
+    .eq("user_id", targetUserId)
+    .eq("group_id", grupa.id)
+    .is("cancelled_at", null)
+    .gte("checked_in_at", dayStart.toISOString())
+    .limit(1);
+  if (!targetActive?.length) {
+    return { error: "Taj više nije za šankom. Zakasnio si." };
+  }
+
   const since = new Date(Date.now() - NAJAVA_TRAJANJE_MS).toISOString();
   const { data: recent } = await supabase
     .from("najave")
@@ -358,7 +378,7 @@ export async function najaviDolazak() {
 
   const { error } = await supabase
     .from("najave")
-    .insert({ user_id: user.id, group_id: grupa.id });
+    .insert({ user_id: user.id, group_id: grupa.id, target_user_id: targetUserId });
   if (error) {
     return { error: `Najava nije prošla: ${error.message}` };
   }
@@ -369,58 +389,14 @@ export async function najaviDolazak() {
       .select("username")
       .eq("id", user.id)
       .maybeSingle();
-    await notifyGroup({
-      groupId: grupa.id,
-      groupName: grupa.name,
-      senderId: user.id,
-      body: najavaPushBody(profile?.username ?? "Netko"),
+    await notifyUser({
+      userId: targetUserId,
+      body: najavaTargetPushBody(profile?.username ?? "Netko"),
     });
   } catch {
     // najava je prošla, push je best-effort
   }
 
-  return { ok: true };
-}
-
-export async function cancelCheckIn() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { active } = await getActiveGroup(supabase, user.id);
-  if (!active) {
-    return { error: "Nisi ni u jednoj grupi. Od čega bježiš?" };
-  }
-
-  const dayStart = getCurrentDayStart();
-
-  const { data: rows, error: findError } = await supabase
-    .from("checkins")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("group_id", active.id)
-    .is("cancelled_at", null)
-    .gte("checked_in_at", dayStart.toISOString())
-    .order("checked_in_at", { ascending: false })
-    .limit(1);
-
-  if (findError) {
-    return { error: `Nešto je puklo: ${findError.message}` };
-  }
-  if (!rows?.length) {
-    return { error: "Nemaš aktivan check-in. Od čega bježiš?" };
-  }
-
-  const { error } = await supabase
-    .from("checkins")
-    .update({ cancelled_at: new Date().toISOString() })
-    .eq("id", rows[0].id);
-
-  if (error) {
-    return { error: `Poništavanje nije prošlo: ${error.message}` };
-  }
   return { ok: true };
 }
 
@@ -554,46 +530,4 @@ export async function undoLastDrink() {
     return { error: `Nije prošlo: ${error.message}` };
   }
   return { ok: true };
-}
-
-// Kolo pića ("Piće dana") — rezultat bira ISKLJUČIVO server (anti-cheat);
-// strogo 1 spin dnevno PO KORISNIKU (bez obzira na grupu), bez check-in
-// uvjeta — ikona živi u headeru i vrti se i prije dolaska
-export async function spinKolo() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { active } = await getActiveGroup(supabase, user.id);
-  if (!active) {
-    return { error: "Nisi ni u jednoj grupi. Gdje bi to pio?" };
-  }
-
-  const dayStart = getCurrentDayStart();
-
-  const { data: already } = await supabase
-    .from("kolo_spins")
-    .select("id, result")
-    .eq("user_id", user.id)
-    .gte("created_at", dayStart.toISOString())
-    .limit(1);
-  if (already?.length) {
-    return { error: "Kolo je presudilo. Nema žalbe.", already: true, result: already[0].result };
-  }
-
-  const result = DRINK_TYPES[Math.floor(Math.random() * DRINK_TYPES.length)].key;
-
-  const admin = createAdminClient();
-  const { error } = await admin
-    .from("kolo_spins")
-    .insert({ user_id: user.id, group_id: active.id, result });
-  if (error) {
-    return { error: `Kolo je zapelo: ${error.message}` };
-  }
-
-  // Namjerno bez pusha: rezultat kola vide svi na Šanku (realtime), a
-  // notifikacija po svakom spinu je gnjavila — odluka korisnika
-  return { ok: true, result };
 }

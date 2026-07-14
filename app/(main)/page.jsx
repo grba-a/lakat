@@ -34,14 +34,14 @@ export default async function Home() {
   if (!active) {
     return (
       <main className="flex flex-1 flex-col">
-        <button
-          type="button"
-          disabled
-          className="glass mt-6 flex h-40 w-full flex-col items-center justify-center gap-1 rounded-hero border-white/10 font-display text-6xl uppercase tracking-wide text-muted opacity-60"
-        >
-          Tu sam
-          <span className="text-xs tracking-widest">Prvo uđi u grupu</span>
-        </button>
+        <div className="glass mt-6 flex flex-col items-center justify-center gap-1 rounded-hero border-white/10 p-8 text-center opacity-80">
+          <p className="font-display text-4xl uppercase tracking-wide text-muted">
+            Prvo uđi u grupu
+          </p>
+          <p className="text-xs tracking-widest text-muted">
+            Bez ekipe nema šanka.
+          </p>
+        </div>
         <JoinGroupCard />
       </main>
     );
@@ -64,7 +64,6 @@ export default async function Home() {
     { data: checkins },
     allCheckins,
     { data: drinks },
-    { data: spins },
     { count: monthDrinkCount },
     { data: najave },
   ] = await Promise.all([
@@ -88,18 +87,13 @@ export default async function Home() {
       .eq("group_id", active.id)
       .gte("logged_at", dayStart.toISOString()),
     supabase
-      .from("kolo_spins")
-      .select("id, user_id, result, created_at")
-      .eq("group_id", active.id)
-      .gte("created_at", dayStart.toISOString()),
-    supabase
       .from("drinks")
       .select("id", { count: "exact", head: true })
       .eq("group_id", active.id)
       .gte("logged_at", monthStartIso),
     supabase
       .from("najave")
-      .select("id, user_id, created_at")
+      .select("id, user_id, created_at, target_user_id")
       .eq("group_id", active.id)
       .gte("created_at", najavaCutoff),
   ]);
@@ -175,7 +169,6 @@ export default async function Home() {
         initialNajave={najave ?? []}
         initialReactions={reactionsByCheckin}
         initialDrinks={drinks ?? []}
-        initialSpins={spins ?? []}
         monthDrinkCount={monthDrinkCount ?? 0}
       />
       {wrappedMonthKey && <WrappedBanner monthKey={wrappedMonthKey} />}
