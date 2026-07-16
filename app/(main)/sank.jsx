@@ -322,11 +322,7 @@ export default function Sank({
     const title = titles[id];
     if (!title) return null;
     return (
-      <span
-        className={`text-[10px] font-bold uppercase tracking-wider ${
-          title.startsWith("Pička") ? "text-danger" : "text-accent/80"
-        }`}
-      >
+      <span className="text-[10px] font-bold uppercase tracking-wider text-accent/80">
         {title}
       </span>
     );

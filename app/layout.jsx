@@ -29,7 +29,7 @@ const startupImage = APPLE_SPLASH.map(({ w, h, dpr }) => {
 
 export const metadata = {
   title: "Lakat",
-  description: "Tko je za šankom, a tko je pička. Uživo.",
+  description: "Diži ekipu, slikaj dokaz, vodi ligu. Uživo.",
   appleWebApp: {
     capable: true,
     title: "Lakat",

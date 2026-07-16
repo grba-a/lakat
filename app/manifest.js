@@ -2,7 +2,7 @@ export default function manifest() {
   return {
     name: "Lakat",
     short_name: "Lakat",
-    description: "Tko je za šankom, a tko je pička. Uživo.",
+    description: "Diži ekipu, slikaj dokaz, vodi ligu. Uživo.",
     start_url: "/",
     display: "standalone",
     background_color: "#09090b",

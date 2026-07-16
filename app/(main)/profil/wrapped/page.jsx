@@ -7,7 +7,6 @@ import { getDayKey } from "@/lib/day";
 import {
   userDaySets,
   monthRanking,
-  worstOf,
   bestOf,
   computeStreaks,
   monthOf,
@@ -103,10 +102,9 @@ export default async function WrappedPage({ searchParams }) {
     );
   }
 
-  const losers = worstOf(ranking);
-  const winners = bestOf(ranking);
-  const isLoser = losers.some((l) => l.id === user.id);
-  const isWinner = winners.some((w) => w.id === user.id) && !isLoser;
+  // Inventar bez ijednog dolaska nije inventar — 0% se ne slavi
+  const winners = bestOf(ranking).filter((w) => w.days > 0);
+  const isWinner = winners.some((w) => w.id === user.id);
 
   // Najduži niz unutar SAMOG mjeseca — filtriraj daySet na mjesečni prozor
   const monthStart = `${monthKey}-01`;
@@ -141,7 +139,6 @@ export default async function WrappedPage({ searchParams }) {
         rank={rank}
         total={ranking.length}
         streak={streak}
-        isLoser={isLoser}
         isWinner={isWinner}
       />
     </main>

@@ -41,8 +41,8 @@ const FEATURES = [
         <path d="M8 17v-3" />
       </>
     ),
-    title: "Rang i sram",
-    body: "Tko najmanje izlazi — pička mjeseca. Statistika ne laže.",
+    title: "Liga ekipa",
+    body: "Tvoja ekipa protiv drugih. Tko se više druži, taj vodi.",
   },
   {
     icon: (
@@ -196,8 +196,7 @@ export default function WelcomePage() {
           </p>
           <p className="mt-4 text-lg leading-relaxed text-muted">
             Ti si taj koji uvijek piše „di ste“? Osnuj grupu za svoju ekipu,
-            pozovi ih jednim linkom i neka statistika sudi tko je legenda, a tko
-            pička mjeseca.
+            pozovi ih jednim linkom i vodite svoju ekipu do vrha lige.
           </p>
           <Link
             href="/register"

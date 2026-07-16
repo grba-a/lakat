@@ -26,7 +26,6 @@ export default function WrappedCard({
   rank,
   total,
   streak,
-  isLoser,
   isWinner,
 }) {
   const canvasRef = useRef(null);
@@ -57,7 +56,6 @@ export default function WrappedCard({
       if (cancelled) return;
 
       const accent = "#4ade80";
-      const danger = "#f87171";
       const fg = "#f4f4f5";
       const muted = "#8b8b94";
 
@@ -113,16 +111,13 @@ export default function WrappedCard({
       ctx.fillStyle = muted;
       ctx.fillText("NAJDULJI STREAK U MJESECU", 80, streakY + 46);
 
-      if (isLoser || isWinner) {
-        const label = isLoser ? "PIČKA MJESECA" : "INVENTAR MJESECA";
-        const color = isLoser ? danger : accent;
-        const emoji = isLoser ? "👑" : "🏆";
+      if (isWinner) {
         const badgeY = streakY + 220;
         ctx.font = `400 66px ${displayFamily}`;
-        ctx.fillStyle = color;
-        ctx.fillText(label, 80, badgeY);
+        ctx.fillStyle = accent;
+        ctx.fillText("INVENTAR MJESECA", 80, badgeY);
         ctx.font = `56px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
-        ctx.fillText(emoji, 80, badgeY + 90);
+        ctx.fillText("🏆", 80, badgeY + 90);
       }
 
       ctx.textAlign = "center";
@@ -144,7 +139,7 @@ export default function WrappedCard({
     return () => {
       cancelled = true;
     };
-  }, [username, monthLabel, groupName, days, rank, total, streak, isLoser, isWinner]);
+  }, [username, monthLabel, groupName, days, rank, total, streak, isWinner]);
 
   async function handleShare() {
     if (!blob) return;

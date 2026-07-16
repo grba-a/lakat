@@ -6,8 +6,7 @@ const DISMISS_MS = 3000;
 
 // Prikazuje jedan bedž iz reda (queue[0]) pa poziva onDone da ga roditelj
 // makne — sljedeći u redu (ako ima) izroni sam. Roditelj drži queue u
-// stanju i puni ga kad akcija (checkin/komentar/posjeta srama) vrati
-// newBadges.
+// stanju i puni ga kad akcija (checkin/komentar/piće) vrati newBadges.
 export default function BadgeToast({ queue, onDone }) {
   const current = queue?.[0] ?? null;
 

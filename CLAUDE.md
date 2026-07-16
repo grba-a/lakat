@@ -3,11 +3,14 @@
 # LAKAT — Kontekst projekta
 
 ## Što je ovo
-Web aplikacija (PWA) za privatne ekipe koje se checkiraju kad su vani (izvorno kafić Club23 u Srebrenom,
-danas grupa preimenovana u "beta" jer se aplikacija otvara novim korisnicima).
-Korisnici se registriraju, klikom na gumb "TU SAM" označe da su prisutni za šankom.
-Ostali ih vide na popisu u realtimeu. Tko ne dolazi, javno je posramljen kao "pička mjeseca".
-Ton aplikacije je vulgaran i zajebantski — to je feature, ne bug. Copy piši na hrvatskom, slobodno bezobrazno.
+Web aplikacija (PWA) za privatne ekipe koje se druže uživo (izvorno kafić Club23 u Srebrenom;
+cilja regionalno/balkansko tržište — "LAKAT 2.0" pivot iz jednog šanka u aplikaciju za druženje).
+Članovi dižu ekipu (saziv), objavljuju runde s dokaznom slikom i skupljaju bodove za svoju grupu u
+tjednoj LIGI protiv drugih grupa. **Sram mehanika ("pička mjeseca", /shame) je UKLONJENA** —
+motivacija je natjecanje među ekipama, ne prozivanje pojedinca unutar ekipe.
+Ton aplikacije je vulgaran i zajebantski — to je feature, ne bug; vulgarne riječi u copyju su OK i
+dalje, samo mehanika srama ne postoji. Copy piši na hrvatskom, slobodno bezobrazno, ali razumljivo
+cijeloj regiji (izbjegavaj hiper-lokalni sleng koji izvan Dubrovnika nitko ne kuži).
 Jezične konvencije copyja: "pjanac/pjanci" (dubrovački, NE "pijanac"), bez engleskog "checkirati" (domaće: "za šankom", "sjeo za šank"), linkovi za prijavu su "Prijavi se", loading tekst "Sekunda...".
 
 Aplikacija je **multi-tenant**: korisnik može biti član do 3 grupe, svaka grupa ima svoje ime i lozinku
@@ -33,15 +36,19 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
    za pouzdanost (Kremen/Fantom) i liga bodove. Odaziv NE šalje push (realtime je dovoljan).
 2. **Status "prisutan"**: korisnik je prisutan ako ima checkin NAKON danas u 06:00 po Europe/Zagreb.
    Prije 06:00 gleda se jučerašnjih 06:00 (noć traje do 6 ujutro). Nema crona, sve se računa iz timestampa.
-3. **Default stanje**: tko nije prisutan, taj je pička. Nema aktivnog gumba "pička".
-4. **Popis**: prisutni su zeleni, s oznakom "PRISUTAN", na vrhu popisa. Ostali su zamagljeni/zatamnjeni (blur ili opacity).
-5. **Pička mjeseca**: osoba s NAJMANJE check-inova u kalendarskom mjesecu.
-   - Broji se maksimalno jedan check-in po "danu" (dan = 06:00 do 06:00).
-   - Korisniku registriranom sredinom mjeseca broji se samo od dana registracije (usporedba po postotku mogućih dana, ne apsolutnom broju).
-   - Izjednačenje → svi izjednačeni su pička mjeseca.
-   - Računa se on-the-fly kad netko otvori hall of shame. NEMA cron joba.
-   - Grace period: prvih 7 dana od učlanjenja u grupu član je "novi" (`isNew` u lib/stats.js) — ne može biti pička mjeseca i na /shame je prikazan odvojeno ("pošteda"). Rang srama prikazuje samo top 3 (🥇🥈🥉).
-   - Popis na Šanku prikazuje samo prisutne / koji stižu / pobjegle — "nema ga" korisnici se NE prikazuju.
+3. **Popis**: prisutni su zeleni s dokaznom slikom na vrhu popisa; prikazuju se samo prisutni / koji stižu — "nema ga" korisnici se NE prikazuju.
+4. **Liga ekipa** (`lib/liga.js`, `/liga` tab — zamijenio /shame): grupe se natječu TJEDNO
+   (ponedjeljak 06:00 → ponedjeljak 06:00 po lakat-danima, `weekStartKey`). Bodovi on-the-fly iz
+   checkins (NEMA crona ni score tablice): dolazak (jedinstveni user+dan) = +2 (`BOD_DOLAZAK`),
+   ispunjen odaziv na saziv (checkin sa `saziv_id`, jedinstven user+saziv) = +1 (`BOD_ODAZIV`).
+   Cross-group zbrajanje ide ADMIN klijentom, ali UI smije vidjeti SAMO ime grupe + bodove + broj
+   članova — nikad tuđe slike/članove/lokacije. Widget na vrhu Šanka ("🏆 n. u ligi") + puna
+   tablica na /liga s prvakom prošlog tjedna. Sirovi bodovi bez normalizacije po veličini grupe —
+   NAMJERNO: više članova = više bodova = motiv za pozivanje ljudi (growth petlja).
+5. **Wrapped/statistika**: mjesečni rang po postotku dolazaka ostaje (`monthRanking`, `bestOf` za
+   "Inventar mjeseca" 🏆 na Wrapped kartici) — slavi se najbolji, ne proziva najgori. `worstOf`,
+   `allTimeStats` i picka_* bedževi su OBRISANI (stari picka_* redovi u `user_badges` ostaju u
+   bazi, `badgeInfo()` za njih vraća null pa se ne renderiraju).
 6. **Registracija**: email, lozinka, username, ime + šifra grupe (join postojeće ili create nove). Šifra grupe je hashirana u `groups.password_hash` (pgcrypto) i provjerava se ISKLJUČIVO server-side preko `verify_group_password` RPC-a (service_role only). Nikad ne slati šifru u klijentski bundle.
 
 ## Baza (Supabase)
@@ -75,7 +82,7 @@ Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkin
 ## Ekrani
 1. `/login` i `/register` — auth (join ili create grupu pri registraciji)
 2. `/` — glavni "Šank": realtime popis korisnika (prisutni + "stiže kod X"), "Slike dana"; objava runde ide kroz PLUS u navbaru (dostupan na svim ekranima)
-3. `/shame` — hall of shame: trenutno stanje mjeseca + arhiva
+3. `/liga` — liga ekipa: tjedna tablica svih grupa + prvak prošlog tjedna + kako se boduje
 4. `/mapa` — Leaflet mapa check-in lokacija
 5. `/profil` i `/profil/postavke` — vlastita statistika, galerija, upravljanje grupama
 6. `/korisnik/[id]` — tuđi profil

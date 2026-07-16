@@ -22,7 +22,7 @@ function comment(pct) {
   if (pct >= 80) return "Praktički inventar kafane. Svaka čast.";
   if (pct >= 50) return "Solidno. Šank te prepoznaje.";
   if (pct >= 25) return "Mlako. Ekipa počinje zaboravljati kako izgledaš.";
-  return "Sramota. Titula pičke mjeseca ti maše iz daljine.";
+  return "Sramota. Ekipa te vodi kao nestalu osobu.";
 }
 
 function drinkComment(total) {

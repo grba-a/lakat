@@ -8,12 +8,13 @@ import {
   userDaySets,
   computeStreaks,
   titleFor,
-  monthRanking,
-  worstOf,
   monthOf,
   previousMonth,
   lastDayOfMonth,
 } from "@/lib/stats";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { computeLiga, weekStartKey, bodovaLabel } from "@/lib/liga";
+import Link from "next/link";
 import Sank from "./sank";
 import Flashbacks from "./flashbacks";
 import InstallHint from "./install-hint";
@@ -139,21 +140,29 @@ export default async function Home() {
     });
   }
 
-  // Titule: streak po korisniku + kruna za aktualnu pičku mjeseca (iz prozora)
+  // Titule: samo streak status — sram mehanika je maknuta
   const daySets = userDaySets(allCheckins);
   const todayKey = getDayKey(new Date());
-  const losers = worstOf(
-    monthRanking({
-      profiles: allProfiles,
-      daySets,
-      monthKey: monthOf(todayKey),
-      todayKey,
-    })
-  );
   const titles = {};
   for (const p of allProfiles) {
     const { current } = computeStreaks(daySets.get(p.id) ?? new Set(), todayKey);
-    titles[p.id] = titleFor(current, losers.some((l) => l.id === p.id));
+    titles[p.id] = titleFor(current);
+  }
+
+  // Liga widget: pozicija i bodovi aktivne grupe ovaj tjedan (admin klijent
+  // zbog cross-group zbrajanja; UI dobije samo rang + bodove)
+  let liga = null;
+  try {
+    const table = await computeLiga({
+      admin: createAdminClient(),
+      weekKey: weekStartKey(todayKey),
+    });
+    const rank = table.findIndex((g) => g.id === active.id) + 1;
+    if (rank > 0) {
+      liga = { rank, points: table[rank - 1].points, total: table.length };
+    }
+  } catch {
+    // liga je bonus — Šank živi i bez nje (npr. prije primjene SQL-a)
   }
 
   // Slike dana renderira Sank (realtime rows) — ovdje se više ne deriviraju
@@ -172,6 +181,18 @@ export default async function Home() {
 
   return (
     <main className="flex flex-1 flex-col">
+      {liga && (
+        <Link
+          href="/liga"
+          className="pressable mt-4 flex items-center justify-between rounded-card border border-white/10 bg-white/[0.03] px-4 py-2.5"
+        >
+          <span className="text-xs font-bold uppercase tracking-widest">
+            🏆 {liga.rank}. u ligi{" "}
+            <span className="text-muted">· {bodovaLabel(liga.points)} ovaj tjedan</span>
+          </span>
+          <span className="text-muted">›</span>
+        </Link>
+      )}
       <Sank
         key={active.id}
         groupId={active.id}
