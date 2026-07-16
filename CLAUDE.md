@@ -24,6 +24,13 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
 
 ## Pravila igre (poslovna logika)
 1. **Runda (check-in)**: zeleni PLUS u sredini navbara (TikTok stil, `plus-button.jsx` + `runda-flow.jsx`, lazy iz `nav.jsx`) → kamera → **photo editor** (`photo-editor.jsx`: pregled + opcionalni IG-story tekst, 4 stila, drag pozicija; tekst se peče canvasom u JPEG prije uploada, thumb iz pečenog bloba) → "Objavi" upisuje red u `checkins` → **omnitrix kolo pića** (`omnitrix.jsx`: okreće se prstom 1:1, inercija + snap na segment, odabrano je pod kazaljkom, "Potvrdi" = logDrink; X preskače; NE random, potpuno neprozirni overlay). **Više rundi dnevno je dozvoljeno** — prva slika dana je check-in (jedina šalje push grupi, `isFirstToday` u checkIn akciji), svaka sljedeća je nova runda (nova slika u Slike dana + piće). Piće se logira ISKLJUČIVO kroz taj flow; undo = toast "↩ Krivi tap" (~8s) nakon zapisanog pića. Veliki gumb "TU SAM" i drink-bar više NE postoje. **"Ipak bježim" je maknut** — `cancelCheckIn` akcija ne postoji, `checkins.cancelled_at` kolona ostaje u bazi zbog starih redova (filteri `.is("cancelled_at", null)` ostaju).
+1b. **Saziv "Dižem ekipu"** (`saziv-card.jsx` na vrhu Šanka): bilo koji član digne okupljanje —
+   mjesto (max 40 znakova) + vrijeme ("Sad" ili time picker; prošlo vrijeme = sutra) → push cijeloj
+   grupi (`sazivPushBody`) → ostali se odazivaju ✓ Stižem / ✗ Ne mogu (upsert, može se predomisliti).
+   Max JEDAN živi saziv po grupi; živi do `at_time + 3h` (client filter, nema crona); tko digne,
+   automatski je "stizem"; samo kreator može "Spustiti" (delete, cascade briše odazive). Runda
+   nastala u prozoru saziva (`at_time - 1h` do `at_time + 3h`) dobije `checkins.saziv_id` — temelj
+   za pouzdanost (Kremen/Fantom) i liga bodove. Odaziv NE šalje push (realtime je dovoljan).
 2. **Status "prisutan"**: korisnik je prisutan ako ima checkin NAKON danas u 06:00 po Europe/Zagreb.
    Prije 06:00 gleda se jučerašnjih 06:00 (noć traje do 6 ujutro). Nema crona, sve se računa iz timestampa.
 3. **Default stanje**: tko nije prisutan, taj je pička. Nema aktivnog gumba "pička".
@@ -46,6 +53,8 @@ Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `s
 - `group_members`: group_id, user_id, role (admin/member), joined_at
 - `reactions`: checkin_id, user_id, emoji (unique po user/checkin)
 - `najave`: "stižem" najave dolaska; od `supabase-najave2.sql` imaju `target_user_id` (uuid, nullable) — najava cilja KONKRETNOG prisutnog (klik "👉 Stižem" na njegovoj kartici), push ide SAMO meti (`notifyUser` + `najavaTargetPushBody`), ostali vide label "Stiže kod X" + badge "👀 n stiže/stižu" na kartici mete. Nema najave dok nitko nije za šankom (nema komu). Stari redovi imaju target null → generični label "Stiže (navodno)" (isti fallback kad meta ode)
+- `sazivi`: saziv okupljanja (od `supabase-saziv1.sql`) — id, group_id, created_by, place_text (1-40), at_time, created_at. Jedan živi po grupi (enforce u akciji `digniEkipu`, ne u bazi); nema update policyja (otkaži pa digni novi)
+- `saziv_odazivi`: saziv_id, user_id, group_id, status ('stizem'|'ne_mogu'), responded_at; unique (saziv_id, user_id) — upsert mijenja odgovor. `checkins.saziv_id` (nullable, on delete set null) veže rundu na saziv
 - `push_subscriptions`: user_id, subscription (jsonb), created_at
 - `drinks`: beer log — id, user_id, group_id, drink_type, logged_at. Redni broj pića se ne sprema, derivira se brojanjem redova po lakat-danu. Lista pića je u `lib/drinks.js` (DRINK_TYPES, uklj. pelin od `supabase-pica3.sql`; **"sot" je maknut iz ponude** — ključ ostaje u DB constraintima zbog starih redova, `drinkInfo("sot")` vraća null pa prikazi moraju biti null-safe; rakija nosi ⚡); zadnje danas logirano piće je ujedno marker korisnika na mapi (fallback: random emoji stabilan po danu). `profiles.map_emoji` postoji u bazi ali je DEPRECATED — picker je maknut, kolona se ne koristi.
 - `kolo_spins`: NAPUŠTENO — random kolo "Piće dana" je zamijenjeno omnitrix odabirom pića u runda flowu (korisnik BIRA, ne random). Tablica i stari redovi ostaju u bazi, kod je ne čita niti piše; `spinKolo` akcija i `kolo-icon.jsx` su obrisani.
@@ -53,7 +62,7 @@ Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `s
 RLS je uključen i grupno-scopan (`is_member(group_id)`, `shares_group_with(id)` helper funkcije). Sva pisanja u `groups`/`group_members` idu isključivo kroz service-role admin klijent (`lib/supabase/admin.js`), nema client insert/update policyja na tim tablicama.
 
 ## Realtime
-Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkins`/`najave`/`reactions`/`drinks` (INSERT/UPDATE, `drinks` i reakcije i DELETE). Kad netko objavi rundu ili logira piće, popis se svima u istoj grupi osvježi bez refresha. Runda-flow NE radi optimističke redove — Šank novi red dobije realtimeom.
+Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkins`/`najave`/`reactions`/`drinks`/`sazivi`/`saziv_odazivi` (INSERT/UPDATE, `drinks` i reakcije i DELETE, `sazivi` INSERT+DELETE). Kad netko objavi rundu ili logira piće, popis se svima u istoj grupi osvježi bez refresha. Runda-flow NE radi optimističke redove — Šank novi red dobije realtimeom.
 
 ## Env varijable (.env.local)
 - NEXT_PUBLIC_SUPABASE_URL

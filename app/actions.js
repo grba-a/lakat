@@ -13,6 +13,7 @@ import {
   najavaTargetPushBody,
   commentPushBody,
   drinkMilestonePushBody,
+  sazivPushBody,
 } from "@/lib/push-copy";
 import { evaluateBadges } from "@/lib/badges";
 import { drinkInfo } from "@/lib/drinks";
@@ -108,10 +109,27 @@ export async function checkIn(photoUrl, thumbUrl, coords) {
   }
   const isFirstToday = !existing?.length;
 
+  // Runda nastala u prozoru živog saziva se veže na njega (pouzdanost +
+  // liga bodovi kasnije); prozor = sat prije at_time do 3h nakon
+  let saziv_id = null;
+  try {
+    const zivi = await fetchZiviSaziv(supabase, active.id);
+    if (
+      zivi &&
+      Date.now() >= new Date(zivi.at_time).getTime() - SAZIV_RANIJE_MS
+    ) {
+      saziv_id = zivi.id;
+    }
+  } catch {
+    // saziv je bonus — runda ide dalje i bez njega
+  }
+
+  // saziv_id ide u insert samo kad postoji — runda ne smije ovisiti o
+  // tome je li saziv schema već primijenjena
   const checkedInAt = new Date().toISOString();
-  const { error } = await supabase
-    .from("checkins")
-    .insert({ user_id: user.id, group_id: active.id, photo_url, thumb_url, lat, lng });
+  const row = { user_id: user.id, group_id: active.id, photo_url, thumb_url, lat, lng };
+  if (saziv_id) row.saziv_id = saziv_id;
+  const { error } = await supabase.from("checkins").insert(row);
   if (error) {
     return { error: `Checkin nije prošao: ${error.message}` };
   }
@@ -494,6 +512,180 @@ export async function logDrink(drinkType) {
   }
 
   return { ok: true, count: tonightCount, newBadges };
+}
+
+// ── Saziv "Dižem ekipu" ────────────────────────────────────────────────
+// Jedan živi saziv po grupi: od kreiranja do at_time + 3h. Nema crona —
+// istek se filtrira timestampom (isti obrazac kao najave).
+
+const SAZIV_ZIVOT_NAKON_MS = 3 * 60 * 60 * 1000;
+const SAZIV_RANIJE_MS = 60 * 60 * 1000;
+const SAZIV_MAX_UNAPRIJED_MS = 24 * 60 * 60 * 1000;
+const SAZIV_MJESTO_MAX = 40;
+
+const sazivTimeFmt = new Intl.DateTimeFormat("hr-HR", {
+  timeZone: "Europe/Zagreb",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+async function fetchZiviSaziv(supabase, groupId) {
+  const cutoff = new Date(Date.now() - SAZIV_ZIVOT_NAKON_MS).toISOString();
+  const { data } = await supabase
+    .from("sazivi")
+    .select("id, created_by, place_text, at_time, created_at")
+    .eq("group_id", groupId)
+    .gte("at_time", cutoff)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  return data?.[0] ?? null;
+}
+
+export async function digniEkipu(placeText, atTimeIso) {
+  const mjesto = placeText?.toString().trim() ?? "";
+  if (!mjesto) {
+    return { error: "Gdje se dižete? Mjesto, majstore." };
+  }
+  if (mjesto.length > SAZIV_MJESTO_MAX) {
+    return { error: `Kraće. Max ${SAZIV_MJESTO_MAX} znakova, ne roman.` };
+  }
+
+  const atTime = new Date(atTimeIso ?? "");
+  if (Number.isNaN(atTime.getTime())) {
+    return { error: "To vrijeme ne postoji." };
+  }
+  if (atTime.getTime() < Date.now() - 5 * 60 * 1000) {
+    return { error: "To je prošlo. Vremeplov još ne radi." };
+  }
+  if (atTime.getTime() > Date.now() + SAZIV_MAX_UNAPRIJED_MS) {
+    return { error: "Max 24 sata unaprijed. Ne planiramo godišnji." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { active } = await getActiveGroup(supabase, user.id);
+  if (!active) {
+    return { error: "Nisi ni u jednoj grupi. Koga točno dižeš?" };
+  }
+
+  const postojeci = await fetchZiviSaziv(supabase, active.id);
+  if (postojeci) {
+    return { error: "Saziv već postoji. Odazovi se na njega." };
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("sazivi")
+    .insert({
+      group_id: active.id,
+      created_by: user.id,
+      place_text: mjesto,
+      at_time: atTime.toISOString(),
+    })
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    return { error: `Saziv nije prošao: ${error.message}` };
+  }
+
+  // Tko diže, taj i stiže — auto odaziv (greška ne ruši saziv, builder
+  // nikad ne baca nego vraća {error} koji ovdje svjesno ignoriramo)
+  if (inserted?.id) {
+    await supabase.from("saziv_odazivi").insert({
+      saziv_id: inserted.id,
+      user_id: user.id,
+      group_id: active.id,
+      status: "stizem",
+    });
+  }
+
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle();
+    const jeSad = atTime.getTime() - Date.now() < 10 * 60 * 1000;
+    await notifyGroup({
+      groupId: active.id,
+      groupName: active.name,
+      senderId: user.id,
+      body: sazivPushBody(
+        profile?.username ?? "Netko",
+        mjesto,
+        jeSad ? null : sazivTimeFmt.format(atTime)
+      ),
+    });
+  } catch {
+    // saziv je prošao, push je best-effort
+  }
+
+  return { ok: true, sazivId: inserted?.id ?? null };
+}
+
+// Odaziv na saziv: stizem / ne_mogu; ponovni tap mijenja status (upsert)
+export async function odazoviSe(sazivId, status) {
+  if (!["stizem", "ne_mogu"].includes(status)) {
+    return { error: "Stižeš ili ne stižeš. Trećeg nema." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // RLS pušta samo sazive vlastitih grupa — ovo je ujedno provjera članstva
+  const { data: saziv } = await supabase
+    .from("sazivi")
+    .select("id, group_id, at_time")
+    .eq("id", sazivId)
+    .maybeSingle();
+  if (!saziv) {
+    return { error: "Taj saziv ne postoji ili nije iz tvoje grupe." };
+  }
+  if (new Date(saziv.at_time).getTime() + SAZIV_ZIVOT_NAKON_MS < Date.now()) {
+    return { error: "Taj saziv je istekao. Prekasno, kao i obično." };
+  }
+
+  const { error } = await supabase
+    .from("saziv_odazivi")
+    .upsert(
+      {
+        saziv_id: saziv.id,
+        user_id: user.id,
+        group_id: saziv.group_id,
+        status,
+        responded_at: new Date().toISOString(),
+      },
+      { onConflict: "saziv_id,user_id" }
+    );
+  if (error) {
+    return { error: `Nije prošlo: ${error.message}` };
+  }
+  return { ok: true };
+}
+
+// Otkazivanje — samo tko je digao može spustiti (cascade briše odazive)
+export async function otkaziSaziv(sazivId) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const { error } = await supabase
+    .from("sazivi")
+    .delete()
+    .eq("id", sazivId)
+    .eq("created_by", user.id);
+  if (error) {
+    return { error: `Nije prošlo: ${error.message}` };
+  }
+  return { ok: true };
 }
 
 // Krivi tap — briše zadnje logirano piće večeras (samo svoje)

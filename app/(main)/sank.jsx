@@ -9,6 +9,7 @@ import Avatar from "./avatar";
 import PhotoLightbox from "./photo-lightbox";
 import ReactionBar, { toggleReaction } from "./reaction-bar";
 import CommentThread from "./comment-thread";
+import SazivCard from "./saziv-card";
 
 const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -17,6 +18,7 @@ const timeFmt = new Intl.DateTimeFormat("hr-HR", {
 });
 
 const NAJAVA_TRAJANJE_MS = 45 * 60 * 1000;
+const SAZIV_ZIVOT_NAKON_MS = 3 * 60 * 60 * 1000;
 
 // Makni jedan red (po id-u) iz mape stanja
 function removeRow(setMap, id) {
@@ -40,6 +42,8 @@ export default function Sank({
   initialReactions = {},
   initialDrinks = [],
   monthDrinkCount = 0,
+  initialSaziv = null,
+  initialOdazivi = [],
 }) {
   // Svi današnji checkin REDOVI po id-u (korisnik može imati više rundi
   // dnevno). Realtime INSERT dodaje red, UPDATE mijenja po id-u.
@@ -59,6 +63,14 @@ export default function Sank({
   const [drinks, setDrinks] = useState(() => {
     const map = {};
     for (const d of initialDrinks) map[d.id] = d;
+    return map;
+  });
+  // Živi saziv (max jedan po grupi) + odazivi keyed po user_id (jedan
+  // odaziv po članu; INSERT i UPDATE oba samo pregaze red)
+  const [saziv, setSaziv] = useState(initialSaziv);
+  const [odazivi, setOdazivi] = useState(() => {
+    const map = {};
+    for (const o of initialOdazivi) map[o.user_id] = o;
     return map;
   });
   const [now, setNow] = useState(() => Date.now());
@@ -129,6 +141,29 @@ export default function Sank({
             return;
           }
           setDrinks((prev) => ({ ...prev, [payload.new.id]: payload.new }));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "sazivi", filter: groupFilter },
+        (payload) => {
+          // Jedan živi saziv po grupi — noviji pregazi eventualni stari
+          setSaziv(payload.new);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "sazivi", filter: groupFilter },
+        (payload) => {
+          setSaziv((prev) => (prev && prev.id === payload.old.id ? null : prev));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "saziv_odazivi", filter: groupFilter },
+        (payload) => {
+          if (payload.eventType === "DELETE") return; // cascade uz saziv, karta ionako nestaje
+          setOdazivi((prev) => ({ ...prev, [payload.new.user_id]: payload.new }));
         }
       )
       .subscribe();
@@ -223,6 +258,19 @@ export default function Sank({
     }
     return [...byUser.entries()].map(([userId, photos]) => ({ userId, photos }));
   }, [rows, dayStartIso]);
+
+  // Saziv živi do at_time + 3h; istek "otkuca" minutni now timer
+  const ziviSaziv =
+    saziv && new Date(saziv.at_time).getTime() + SAZIV_ZIVOT_NAKON_MS > now
+      ? saziv
+      : null;
+  const sazivOdazivi = useMemo(
+    () =>
+      ziviSaziv
+        ? Object.values(odazivi).filter((o) => o.saziv_id === ziviSaziv.id)
+        : [],
+    [odazivi, ziviSaziv]
+  );
 
   const iAmPresent = present.some((p) => p.id === currentUserId);
   const iAmArriving = arriving.some((p) => p.id === currentUserId);
@@ -319,6 +367,34 @@ export default function Sank({
 
   return (
     <div className="flex flex-1 flex-col">
+      <SazivCard
+        saziv={ziviSaziv}
+        odazivi={sazivOdazivi}
+        profiles={profiles}
+        currentUserId={currentUserId}
+        now={now}
+        onSazivCreated={(s) => {
+          setSaziv(s);
+          setOdazivi((prev) => ({
+            ...prev,
+            [currentUserId]: {
+              user_id: currentUserId,
+              saziv_id: s.id,
+              status: "stizem",
+            },
+          }));
+          setNow(Date.now());
+        }}
+        onOdaziv={(userId, sazivId, status) =>
+          setOdazivi((prev) => ({
+            ...prev,
+            [userId]: { user_id: userId, saziv_id: sazivId, status },
+          }))
+        }
+        onSazivGone={() => setSaziv(null)}
+        onError={setError}
+      />
+
       {!iAmPresent && (
         <div className="mt-4 rounded-card border border-accent/25 bg-accent/[0.06] px-4 py-3 text-center">
           <p className="text-sm font-bold">Slikaj dokaz i sjedni za šank.</p>

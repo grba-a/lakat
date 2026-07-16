@@ -58,6 +58,7 @@ export default async function Home() {
   ).toISOString();
 
   const najavaCutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+  const sazivCutoff = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
   const [
     { data: profiles },
     { data: checkins },
@@ -65,6 +66,7 @@ export default async function Home() {
     { data: drinks },
     { count: monthDrinkCount },
     { data: najave },
+    { data: sazivi },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -95,7 +97,23 @@ export default async function Home() {
       .select("id, user_id, created_at, target_user_id")
       .eq("group_id", active.id)
       .gte("created_at", najavaCutoff),
+    supabase
+      .from("sazivi")
+      .select("id, created_by, place_text, at_time, created_at")
+      .eq("group_id", active.id)
+      .gte("at_time", sazivCutoff)
+      .order("created_at", { ascending: false })
+      .limit(1),
   ]);
+
+  // Odazivi ovise o ID-u živog saziva pa idu u drugi val (kao reakcije)
+  const ziviSaziv = sazivi?.[0] ?? null;
+  const { data: sazivOdazivi } = ziviSaziv
+    ? await supabase
+        .from("saziv_odazivi")
+        .select("user_id, saziv_id, status")
+        .eq("saziv_id", ziviSaziv.id)
+    : { data: [] };
 
   // Statistika unutar grupe kreće od ulaska u grupu (za staru ekipu = registracija)
   const allProfiles = (profiles ?? []).map((p) => ({
@@ -165,6 +183,8 @@ export default async function Home() {
         initialReactions={reactionsByCheckin}
         initialDrinks={drinks ?? []}
         monthDrinkCount={monthDrinkCount ?? 0}
+        initialSaziv={ziviSaziv}
+        initialOdazivi={sazivOdazivi ?? []}
       />
       {wrappedMonthKey && <WrappedBanner monthKey={wrappedMonthKey} />}
       <Suspense fallback={null}>
