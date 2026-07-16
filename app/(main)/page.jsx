@@ -149,9 +149,16 @@ export default async function Home() {
     titles[p.id] = titleFor(current);
   }
 
-  // Liga widget: pozicija i bodovi aktivne grupe ovaj tjedan (admin klijent
-  // zbog cross-group zbrajanja; UI dobije samo rang + bodove)
+  // Grupni streak: dan s bar jednom rundom BILO KOGA iz grupe = streak dan
+  // (prozor od 60 dana ograničava prikaz, isto kao streak titule)
+  const groupDaySet = new Set(allCheckins.map((c) => getDayKey(c.checked_in_at)));
+  const { current: groupStreak } = computeStreaks(groupDaySet, todayKey);
+
+  // Liga widget: pozicija i bodovi aktivne grupe ovaj tjedan + izazov
+  // tjedna (admin klijent zbog cross-group zbrajanja; UI dobije samo
+  // rang + bodove svoje grupe)
   let liga = null;
+  let izazov = null;
   try {
     const table = await computeLiga({
       admin: createAdminClient(),
@@ -160,6 +167,7 @@ export default async function Home() {
     const rank = table.findIndex((g) => g.id === active.id) + 1;
     if (rank > 0) {
       liga = { rank, points: table[rank - 1].points, total: table.length };
+      izazov = table[rank - 1].izazov;
     }
   } catch {
     // liga je bonus — Šank živi i bez nje (npr. prije primjene SQL-a)
@@ -188,9 +196,12 @@ export default async function Home() {
         >
           <span className="text-xs font-bold uppercase tracking-widest">
             🏆 {liga.rank}. u ligi{" "}
-            <span className="text-muted">· {bodovaLabel(liga.points)} ovaj tjedan</span>
+            <span className="text-muted">· {bodovaLabel(liga.points)}</span>
           </span>
-          <span className="text-muted">›</span>
+          <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
+            {groupStreak > 0 && <span className="text-amber-300">🔥 {groupStreak}</span>}
+            <span className="text-muted">›</span>
+          </span>
         </Link>
       )}
       <Sank
@@ -206,6 +217,7 @@ export default async function Home() {
         monthDrinkCount={monthDrinkCount ?? 0}
         initialSaziv={ziviSaziv}
         initialOdazivi={sazivOdazivi ?? []}
+        izazov={izazov}
       />
       {wrappedMonthKey && <WrappedBanner monthKey={wrappedMonthKey} />}
       <Suspense fallback={null}>

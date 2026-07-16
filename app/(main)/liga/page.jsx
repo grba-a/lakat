@@ -10,6 +10,7 @@ import {
   bodovaLabel,
   BOD_DOLAZAK,
   BOD_ODAZIV,
+  BOD_IZAZOV,
 } from "@/lib/liga";
 
 const dateFmt = new Intl.DateTimeFormat("hr-HR", {
@@ -133,6 +134,7 @@ export default async function LigaPage() {
                               ? "člana"
                               : "članova"}
                           {g.activeCount > 0 && ` · ${g.activeCount} aktivno`}
+                          {g.izazov?.done && " · 🎯 izazov ✓"}
                         </span>
                       </span>
                     </span>
@@ -170,6 +172,11 @@ export default async function LigaPage() {
             📣 Došao na saziv —{" "}
             <span className="font-bold text-foreground">+{BOD_ODAZIV}</span>{" "}
             povrh dolaska
+          </li>
+          <li>
+            🎯 Izazov tjedna ispunjen —{" "}
+            <span className="font-bold text-foreground">+{BOD_IZAZOV}</span>{" "}
+            (novi svaki ponedjeljak, piše na Šanku)
           </li>
         </ul>
         <p className="mt-3 text-xs text-muted">

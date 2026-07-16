@@ -49,6 +49,18 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
    "Inventar mjeseca" 🏆 na Wrapped kartici) — slavi se najbolji, ne proziva najgori. `worstOf`,
    `allTimeStats` i picka_* bedževi su OBRISANI (stari picka_* redovi u `user_badges` ostaju u
    bazi, `badgeInfo()` za njih vraća null pa se ne renderiraju).
+6. **Izazov tjedna** (`lib/izazovi.js`): NEMA tablice ni crona — izazov se deterministički bira
+   FNV-1a hashom (group_id + weekKey) iz poola `IZAZOVI`, ispunjenje se detektira iz checkina
+   tjedna (`checkIzazov`), bodovi +10 idu kroz `computeLiga` (`BOD_IZAZOV`). Prikaz: kompaktna
+   kartica na Šanku ispod saziva (prop `izazov` u `sank.jsx`, ✓ kad je ispunjen) + marker u ligi.
+7. **Grupni streak**: dan s bar 1 rundom bilo koga iz grupe = streak dan; derivat iz istih
+   checkina (60-dnevni prozor Šanka), prikaz "🔥 n" u liga widgetu. Push "streak ekipe umire"
+   ide iz POSTOJEĆEG crona `/api/cron/streak-visi` (`grupniStreakVisiPushBody`, max 1× navečer,
+   samo ako danas još nitko nije izašao) — NE dodavati nove cronove/podsjetnike (BeReal pouka).
+8. **Pouzdanost (Kremen/Fantom)** (`lib/pouzdanost.js` + `pouzdanost-card.jsx`): rekao "stižem"
+   na saziv i stvarno došao (checkin sa saziv_id) vs ispario. Broje se samo ZAKLJUČENI sazivi
+   (at_time+3h prošao). Titula od 3 odaziva: ≥80% Kremen 💎, ≥50% Pola-pola 🌗, inače Fantom 👻.
+   Prikaz SAMO na /profil i /korisnik/[id] — NIKAD push, NIKAD rang (nije novi sram).
 6. **Registracija**: email, lozinka, username, ime + šifra grupe (join postojeće ili create nove). Šifra grupe je hashirana u `groups.password_hash` (pgcrypto) i provjerava se ISKLJUČIVO server-side preko `verify_group_password` RPC-a (service_role only). Nikad ne slati šifru u klijentski bundle.
 
 ## Baza (Supabase)

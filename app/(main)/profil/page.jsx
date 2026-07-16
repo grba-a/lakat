@@ -6,6 +6,8 @@ import { fetchAllCheckins } from "@/lib/checkins";
 import { getCurrentDayStart, getDayKey } from "@/lib/day";
 import { userDaySets, computeStreaks, daysBetween, titleFor, monthOf } from "@/lib/stats";
 import { fetchAllDrinks, favoriteDrink } from "@/lib/drinks";
+import { fetchPouzdanost } from "@/lib/pouzdanost";
+import PouzdanostCard from "../pouzdanost-card";
 import Heatmap from "../heatmap";
 import Galerija from "../galerija";
 import AvatarUploader from "./avatar-uploader";
@@ -66,6 +68,10 @@ export default async function ProfilPage() {
         : Promise.resolve({ data: null }),
       fetchAllDrinks(supabase, user.id, active?.id),
     ]);
+
+  const pouzdanost = active
+    ? await fetchPouzdanost(supabase, user.id, active.id)
+    : { total: 0, held: 0 };
 
   const daySet = userDaySets(checkins).get(user.id) ?? new Set();
   const todayKey = getDayKey(new Date());
@@ -169,6 +175,8 @@ export default async function ProfilPage() {
       </section>
 
       <p className="mt-6 text-sm text-muted">{comment(pct)}</p>
+
+      <PouzdanostCard total={pouzdanost.total} held={pouzdanost.held} own />
 
       <h2 className="mt-10 text-xs font-bold uppercase tracking-widest text-muted">
         Pijanstvo

@@ -44,6 +44,7 @@ export default function Sank({
   monthDrinkCount = 0,
   initialSaziv = null,
   initialOdazivi = [],
+  izazov = null,
 }) {
   // Svi današnji checkin REDOVI po id-u (korisnik može imati više rundi
   // dnevno). Realtime INSERT dodaje red, UPDATE mijenja po id-u.
@@ -390,6 +391,32 @@ export default function Sank({
         onSazivGone={() => setSaziv(null)}
         onError={setError}
       />
+
+      {izazov && (
+        <div
+          className={`mt-2 flex items-center justify-between rounded-card border px-4 py-2.5 ${
+            izazov.done
+              ? "border-accent/30 bg-accent/[0.06]"
+              : "border-white/10 bg-white/[0.03]"
+          }`}
+        >
+          <span className="flex min-w-0 flex-col">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
+              🎯 Izazov tjedna · +10 u ligi
+            </span>
+            <span
+              className={`truncate text-sm font-bold ${izazov.done ? "text-accent" : ""}`}
+            >
+              {izazov.label} — {izazov.description}
+            </span>
+          </span>
+          {izazov.done && (
+            <span className="shrink-0 text-lg text-accent" aria-label="Ispunjeno">
+              ✓
+            </span>
+          )}
+        </div>
+      )}
 
       {!iAmPresent && (
         <div className="mt-4 rounded-card border border-accent/25 bg-accent/[0.06] px-4 py-3 text-center">

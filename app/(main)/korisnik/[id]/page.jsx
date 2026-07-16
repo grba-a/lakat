@@ -4,7 +4,9 @@ import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { fetchAllCheckins } from "@/lib/checkins";
 import { getDayKey } from "@/lib/day";
 import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
+import { fetchPouzdanost } from "@/lib/pouzdanost";
 import Avatar from "../../avatar";
+import PouzdanostCard from "../../pouzdanost-card";
 import Heatmap from "../../heatmap";
 
 const dateFmt = new Intl.DateTimeFormat("hr-HR", {
@@ -51,6 +53,8 @@ export default async function KorisnikPage({ params }) {
   ]);
 
   if (!profile || !membership) notFound();
+
+  const pouzdanost = await fetchPouzdanost(supabase, id, active.id);
 
   const daySet = userDaySets(checkins).get(id) ?? new Set();
   const todayKey = getDayKey(new Date());
@@ -108,6 +112,12 @@ export default async function KorisnikPage({ params }) {
       </section>
 
       <p className="mt-6 text-sm text-muted">{comment(pct)}</p>
+
+      <PouzdanostCard
+        total={pouzdanost.total}
+        held={pouzdanost.held}
+        own={false}
+      />
 
       <Heatmap daySet={daySet} todayKey={todayKey} />
     </main>
