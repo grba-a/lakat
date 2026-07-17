@@ -94,7 +94,7 @@ export default function SazivCard({
         >
           <span className="flex flex-col">
             <span className="font-display text-lg uppercase tracking-wide text-accent">
-              📣 Dižem ekipu
+              📣 Poziv na laktanje
             </span>
             <span className="text-xs text-muted">
               Digni sve odjednom. Mjesto, vrijeme, gotovo.
@@ -107,7 +107,7 @@ export default function SazivCard({
     return (
       <div className="mt-4 rounded-card border border-accent/30 bg-accent/[0.08] px-4 py-4">
         <p className="font-display text-lg uppercase tracking-wide text-accent">
-          📣 Dižem ekipu
+          📣 Poziv na laktanje
         </p>
         <label className="mt-3 block">
           <span className="text-xs font-bold uppercase tracking-widest text-muted">
@@ -166,7 +166,7 @@ export default function SazivCard({
             disabled={isPending || !mjesto.trim()}
             className="pressable flex-1 rounded-button bg-accent px-4 py-3 font-display text-lg uppercase tracking-wide text-black disabled:opacity-50"
           >
-            {isPending ? "Sekunda..." : "Diži ih 📣"}
+            {isPending ? "Sekunda..." : "Zovi narod 📣"}
           </button>
           <button
             type="button"
@@ -201,7 +201,7 @@ export default function SazivCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
-            📣 {creator?.username ?? "Netko"} diže ekipu
+            📣 {creator?.username ?? "Netko"} zove na laktanje
           </p>
           <p className="mt-0.5 truncate font-display text-2xl uppercase tracking-wide">
             {saziv.place_text}

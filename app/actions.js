@@ -14,7 +14,11 @@ import {
   commentPushBody,
   drinkMilestonePushBody,
   sazivPushBody,
+  kadarPushBody,
+  mjestoOtetoPushBody,
+  mjestoOsvojenoPushBody,
 } from "@/lib/push-copy";
+import { detectOtimanje } from "@/lib/mjesta";
 import { evaluateBadges } from "@/lib/badges";
 import { drinkInfo } from "@/lib/drinks";
 
@@ -149,10 +153,15 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
   const row = { user_id: user.id, group_id: active.id, photo_url, thumb_url, lat, lng };
   if (saziv_id) row.saziv_id = saziv_id;
   if (kadar_user_ids) row.kadar_user_ids = kadar_user_ids;
-  const { error } = await supabase.from("checkins").insert(row);
+  const { data: inserted, error } = await supabase
+    .from("checkins")
+    .insert(row)
+    .select("id")
+    .maybeSingle();
   if (error) {
     return { error: `Checkin nije prošao: ${error.message}` };
   }
+  const insertedId = inserted?.id ?? null;
 
   // Bedževi — awaita se (toast treba rezultat odmah), ali greška ovdje
   // ne smije srušiti checkin: default na prazan popis
@@ -169,9 +178,84 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
     // ignoriraj: checkin je prošao, bedževi su bonus
   }
 
-  // Push ostalima iz grupe — SAMO za prvu rundu dana (svaka sljedeća
-  // slika bi spamala grupu); ne smije srušiti checkin ako slanje pukne
+  // Otimanje mjesta: runda s koordinatama može promijeniti vlasnika grid
+  // ćelije na mapi — push objema grupama (best-effort, ne ruši rundu)
+  if (lat != null && lng != null && insertedId) {
+    try {
+      const promjena = await detectOtimanje({
+        admin: createAdminClient(),
+        lat,
+        lng,
+        checkinId: insertedId,
+      });
+      if (promjena) {
+        const zadaci = [
+          notifyGroup({
+            groupId: promjena.novi.id,
+            groupName: promjena.novi.name,
+            body: mjestoOsvojenoPushBody(promjena.prijasnji?.name ?? null),
+          }),
+        ];
+        if (promjena.prijasnji) {
+          zadaci.push(
+            notifyGroup({
+              groupId: promjena.prijasnji.id,
+              groupName: promjena.prijasnji.name,
+              body: mjestoOtetoPushBody(promjena.novi.name),
+            })
+          );
+        }
+        await Promise.allSettled(zadaci);
+      }
+    } catch {
+      // mapa je bonus — runda je prošla
+    }
+  }
+
+  // Kadar kopija "laktaju skupa" — imena tagiranih (best-effort)
+  let kadarBody = null;
+  if (kadar_user_ids) {
+    try {
+      const { data: profili } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .in("id", kadar_user_ids);
+      const imena = kadar_user_ids
+        .map((id) => profili?.find((p) => p.id === id)?.username)
+        .filter(Boolean);
+      if (imena.length >= 2) kadarBody = kadarPushBody(imena);
+    } catch {
+      // fallback na običnu kopiju
+    }
+  }
+
+  // Push ostalima iz grupe — prva runda dana šalje uvijek (kadar kopija
+  // ima prednost); ostale runde SAMO ako su prva kadar slika dana
+  // (max +1 push/dan). Ne smije srušiti checkin ako slanje pukne.
   if (!isFirstToday) {
+    if (kadarBody && insertedId) {
+      try {
+        const { count } = await supabase
+          .from("checkins")
+          .select("id", { count: "exact", head: true })
+          .eq("group_id", active.id)
+          .is("cancelled_at", null)
+          .not("kadar_user_ids", "is", null)
+          .gte("checked_in_at", dayStart.toISOString())
+          .neq("id", insertedId);
+        if ((count ?? 0) === 0) {
+          await notifyGroup({
+            groupId: active.id,
+            groupName: active.name,
+            senderId: user.id,
+            excludeIds: kadar_user_ids,
+            body: kadarBody,
+          });
+        }
+      } catch {
+        // best-effort
+      }
+    }
     return { ok: true, newBadges };
   }
   try {
@@ -184,7 +268,8 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
       groupId: active.id,
       groupName: active.name,
       senderId: user.id,
-      body: checkinPushBody(profile?.username ?? "Netko"),
+      excludeIds: kadarBody ? kadar_user_ids : [],
+      body: kadarBody ?? checkinPushBody(profile?.username ?? "Netko"),
     });
 
     // FOMO: kad treći različiti član danas dođe, pingaj one koji fale —

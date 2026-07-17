@@ -170,7 +170,7 @@ export default async function LigaPage() {
             po članu po danu
           </li>
           <li>
-            📣 Došao na saziv —{" "}
+            📣 Poziv ispoštovan —{" "}
             <span className="font-bold text-foreground">+{BOD_ODAZIV}</span>{" "}
             povrh dolaska
           </li>

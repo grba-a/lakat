@@ -27,7 +27,8 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
 
 ## Pravila igre (poslovna logika)
 1. **Runda (check-in)**: zeleni PLUS u sredini navbara (TikTok stil, `plus-button.jsx` + `runda-flow.jsx`, lazy iz `nav.jsx`) → kamera → **photo editor** (`photo-editor.jsx`: pregled + opcionalni IG-story tekst, 4 stila, drag pozicija; tekst se peče canvasom u JPEG prije uploada, thumb iz pečenog bloba) → "Objavi" upisuje red u `checkins` → **omnitrix kolo pića** (`omnitrix.jsx`: okreće se prstom 1:1, inercija + snap na segment, odabrano je pod kazaljkom, "Potvrdi" = logDrink; X preskače; NE random, potpuno neprozirni overlay). **Više rundi dnevno je dozvoljeno** — prva slika dana je check-in (jedina šalje push grupi, `isFirstToday` u checkIn akciji), svaka sljedeća je nova runda (nova slika u Slike dana + piće). Piće se logira ISKLJUČIVO kroz taj flow; undo = toast "↩ Krivi tap" (~8s) nakon zapisanog pića. Veliki gumb "TU SAM" i drink-bar više NE postoje. **"Ipak bježim" je maknut** — `cancelCheckIn` akcija ne postoji, `checkins.cancelled_at` kolona ostaje u bazi zbog starih redova (filteri `.is("cancelled_at", null)` ostaju).
-1b. **Saziv "Dižem ekipu"** (`saziv-card.jsx` na vrhu Šanka): bilo koji član digne okupljanje —
+1b. **Saziv — u UI-ju se zove "POZIV NA LAKTANJE"** (gumb za slanje: "ZOVI NAROD"; interni
+   nazivi u kodu ostaju sazivi/digniEkipu). (`saziv-card.jsx` na vrhu Šanka): bilo koji član digne okupljanje —
    mjesto (max 40 znakova) + vrijeme ("Sad" ili time picker; prošlo vrijeme = sutra) → push cijeloj
    grupi (`sazivPushBody`) → ostali se odazivaju ✓ Stižem / ✗ Ne mogu (upsert, može se predomisliti).
    Max JEDAN živi saziv po grupi; živi do `at_time + 3h` (client filter, nema crona); tko digne,
@@ -68,6 +69,10 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
    Server u `checkIn` validira da su označeni članovi grupe (ne vjeruje klijentu), autor se
    uvijek dodaje, sprema se samo 2+ u kadru, i samo uz dokaznu sliku. `computeLiga` čita kolonu
    s fallbackom na select bez nje (ne smije pasti prije primjene SQL-a).
+   **Kadar push** (`kadarPushBody`: "X i Y laktaju skupa. A di ste vi?"): prva runda dana s
+   kadrom koristi kadar kopiju UMJESTO checkin kopije; ne-prva runda šalje kadar push SAMO ako
+   je to prva kadar slika dana u grupi (max +1 push/dan); tagirani su `excludeIds`. Face-scan
+   prepoznavanje je RAZMOTRENO I ODBIJENO (GDPR biometrija) — tagovi rade isti posao.
 10. **Share kartice** (`lib/share-card.js` + gumb "Podijeli" u photo-lightbox.jsx): canvas
    1080×1920 story kartica (blur cover pozadina, slika, LAKAT. wordmark, caption,
    laktarenje.com) → Web Share API s files, fallback download. Organski marketing — ne dirati
@@ -76,11 +81,14 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
    koordinatama u zadnjih 30 dana, grupa s najviše rundi na lokaciji (min 3) "drži" mjesto —
    zastavica ⚑ s imenom grupe na Leaflet mapi (mjestaLayer ispod dnevnih markera). Izjednačenje
    = "ničija zemlja". Cross-group ide ADMIN klijentom, van smije SAMO ime grupe + broj rundi.
-   Sve on-the-fly, bez tablice; push za otimanje mjesta NE postoji (odluka: bez gnjavaže).
+   Sve on-the-fly, bez tablice. **Otimanje mjesta push** (`detectOtimanje` u lib/mjesta.js,
+   poziva se iz `checkIn` nakon inserta runde s koordinatama): usporedi vlasnika ćelije bez/s
+   novom rundom; promjena → push osvajačima (`mjestoOsvojenoPushBody`) i eventualnim bivšim
+   vlasnicima (`mjestoOtetoPushBody`). Tihe promjene starenjem rundi NE šalju push.
 6. **Registracija**: email, lozinka, username, ime + šifra grupe (join postojeće ili create nove). Šifra grupe je hashirana u `groups.password_hash` (pgcrypto) i provjerava se ISKLJUČIVO server-side preko `verify_group_password` RPC-a (service_role only). Nikad ne slati šifru u klijentski bundle.
 
 ## Baza (Supabase)
-Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `supabase-setup.sql` → `-avatars` → `-faza1..4` → `-grupe1.sql` → ... → `-najave2.sql` → `-saziv1.sql` → `-kadar1.sql`. NE kreiraj migracijski framework, NE mijenjaj schemu bez pitanja — dodaj novi `supabase-*.sql` fajl po istoj konvenciji.
+Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `supabase-setup.sql` → `-avatars` → `-faza1..4` → `-grupe1.sql` → ... → `-najave2.sql` → `-saziv1.sql` → `-kadar1.sql` → `-kava1.sql`. NE kreiraj migracijski framework, NE mijenjaj schemu bez pitanja — dodaj novi `supabase-*.sql` fajl po istoj konvenciji.
 
 - `profiles`: id (uuid, FK na auth.users), username (unique), avatar_url, active_group_id, created_at
 - `checkins`: id, user_id, group_id, checked_in_at, cancelled_at, photo_url, lat, lng, saziv_id (nullable FK), kadar_user_ids (uuid[], nullable — tko je u kadru, uklj. autora)
@@ -91,7 +99,7 @@ Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `s
 - `sazivi`: saziv okupljanja (od `supabase-saziv1.sql`) — id, group_id, created_by, place_text (1-40), at_time, created_at. Jedan živi po grupi (enforce u akciji `digniEkipu`, ne u bazi); nema update policyja (otkaži pa digni novi)
 - `saziv_odazivi`: saziv_id, user_id, group_id, status ('stizem'|'ne_mogu'), responded_at; unique (saziv_id, user_id) — upsert mijenja odgovor. `checkins.saziv_id` (nullable, on delete set null) veže rundu na saziv
 - `push_subscriptions`: user_id, subscription (jsonb), created_at
-- `drinks`: beer log — id, user_id, group_id, drink_type, logged_at. Redni broj pića se ne sprema, derivira se brojanjem redova po lakat-danu. Lista pića je u `lib/drinks.js` (DRINK_TYPES, uklj. pelin od `supabase-pica3.sql`; **"sot" je maknut iz ponude** — ključ ostaje u DB constraintima zbog starih redova, `drinkInfo("sot")` vraća null pa prikazi moraju biti null-safe; rakija nosi ⚡); zadnje danas logirano piće je ujedno marker korisnika na mapi (fallback: random emoji stabilan po danu). `profiles.map_emoji` postoji u bazi ali je DEPRECATED — picker je maknut, kolona se ne koristi.
+- `drinks`: beer log — id, user_id, group_id, drink_type, logged_at. Redni broj pića se ne sprema, derivira se brojanjem redova po lakat-danu. Lista pića je u `lib/drinks.js` (DRINK_TYPES, uklj. pelin od `supabase-pica3.sql` i **kavu ☕ od `supabase-kava1.sql`**; **"sot" I "vino" su maknuti iz ponude** — ključevi ostaju u DB constraintu zbog starih redova, `drinkInfo()` za njih vraća null pa prikazi moraju biti null-safe; rakija nosi ⚡); zadnje danas logirano piće je ujedno marker korisnika na mapi (fallback: random emoji stabilan po danu). `profiles.map_emoji` postoji u bazi ali je DEPRECATED — picker je maknut, kolona se ne koristi.
 - `kolo_spins`: NAPUŠTENO — random kolo "Piće dana" je zamijenjeno omnitrix odabirom pića u runda flowu (korisnik BIRA, ne random). Tablica i stari redovi ostaju u bazi, kod je ne čita niti piše; `spinKolo` akcija i `kolo-icon.jsx` su obrisani.
 
 RLS je uključen i grupno-scopan (`is_member(group_id)`, `shares_group_with(id)` helper funkcije). Sva pisanja u `groups`/`group_members` idu isključivo kroz service-role admin klijent (`lib/supabase/admin.js`), nema client insert/update policyja na tim tablicama.

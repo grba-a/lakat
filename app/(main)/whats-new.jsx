@@ -2,18 +2,17 @@
 
 import { useEffect, useState } from "react";
 
-const DISMISS_KEY = "lakat-v2-news-dismissed";
-// 19.7. u 06:00 po Zagrebu — kartica živi točno 2 lakat-dana od launcha
-// (17. i 18.7.), poslije je mrtav kod i može se obrisati u nekoj sesiji
+const DISMISS_KEY = "lakat-news-2-dismissed";
+// 2 lakat-dana od deploya batcha #2 — datum potvrditi na dan pusha,
+// poslije isteka kartica je mrtav kod (obrazac: mijenja se sadržaj +
+// DISMISS_KEY + NEWS_END za svaki sljedeći batch)
 const NEWS_END = Date.parse("2026-07-19T04:00:00Z");
 
 const NOVOSTI = [
-  ["📣", "Dižem ekipu", "digni saziv, svi dobiju push, javljaju se stižu li."],
-  ["🏆", "Liga ekipa", "vaša grupa protiv drugih, svaki tjedan. Sram tab je sad Liga."],
-  ["🎯", "Izazov tjedna", "novi svaki ponedjeljak, vrijedi +10 bodova."],
-  ["👥", "Zajednički kadar", "slika s ekipom nosi +4. Označi tko je s tobom."],
-  ["↗", "Podijeli", "svaka slika postaje story kartica za Instagram."],
-  ["⚑", "Naša mjesta", "ekipa s najviše rundi drži lokaciju na mapi."],
+  ["📣", "Poziv na laktanje", "saziv se sad zove kako treba. Gumb: „Zovi narod“."],
+  ["☕", "Kava u kolu", "vino je van, kava unutra — jutarnje laktanje sad legalno postoji."],
+  ["⚑", "Otimanje mjesta", "otmeš li lokaciju drugoj ekipi, obje grupe saznaju odmah."],
+  ["👥", "Laktaju skupa", "zajednički kadar javlja grupi tko se druži bez njih. Bole li uši?"],
 ];
 
 // Jednokratni "što je novo" doček za LAKAT 2.0 — sam se gasi nakon 2 dana,
@@ -64,13 +63,13 @@ export default function WhatsNew() {
 
       <div className="relative px-5 pb-5 pt-6">
         <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-accent">
-          Lakat 2.0
+          Lakat 2.1
         </p>
         <h2 className="mt-1 font-display text-4xl uppercase leading-none tracking-tight">
-          Veliki update<span className="text-accent">.</span>
+          Nova runda<span className="text-accent">.</span>
         </h2>
         <p className="mt-2 text-sm font-bold text-muted">
-          Sram je mrtav. Živjela liga.
+          Rekli smo da stiže još. Nismo lagali.
         </p>
 
         <ul className="stagger mt-5 flex flex-col gap-3">
@@ -92,9 +91,8 @@ export default function WhatsNew() {
         </ul>
 
         <p className="mt-5 border-t border-white/10 pt-4 text-xs leading-relaxed text-muted">
-          I da — ovo je tek početak,{" "}
-          <span className="font-bold text-accent">još noviteta uskoro stiže</span>.
-          Čekali ste tri dana? Nije nam žao. Isplatilo se.
+          <span className="font-bold text-accent">Nastavljamo dolijevati</span> —
+          imaš ideju što fali? Viči. Najbolje ćemo ukrasti i reći da su naše.
         </p>
       </div>
     </div>
