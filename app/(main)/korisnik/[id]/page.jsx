@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { fetchAllCheckins } from "@/lib/checkins";
 import { getDayKey } from "@/lib/day";
-import { userDaySets, computeStreaks, daysBetween, titleFor } from "@/lib/stats";
+import { userDaySets, computeStreaks, countableDays, titleFor } from "@/lib/stats";
 import { fetchPouzdanost } from "@/lib/pouzdanost";
 import Avatar from "../../avatar";
 import PouzdanostCard from "../../pouzdanost-card";
@@ -59,7 +59,7 @@ export default async function KorisnikPage({ params }) {
   const daySet = userDaySets(checkins).get(id) ?? new Set();
   const todayKey = getDayKey(new Date());
   const regKey = getDayKey(membership.joined_at ?? profile.created_at);
-  const possible = daysBetween(regKey, todayKey);
+  const possible = countableDays(regKey, todayKey);
   const total = daySet.size;
   const pct = possible > 0 ? Math.round((total / possible) * 100) : 0;
   const { current, longest } = computeStreaks(daySet, todayKey);

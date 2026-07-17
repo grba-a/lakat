@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { fetchAllCheckins } from "@/lib/checkins";
 import { getCurrentDayStart, getDayKey } from "@/lib/day";
-import { userDaySets, computeStreaks, daysBetween, titleFor, monthOf } from "@/lib/stats";
+import { userDaySets, computeStreaks, countableDays, titleFor, monthOf } from "@/lib/stats";
 import { fetchAllDrinks, favoriteDrink } from "@/lib/drinks";
 import { fetchPouzdanost } from "@/lib/pouzdanost";
 import PouzdanostCard from "../pouzdanost-card";
@@ -80,7 +80,7 @@ export default async function ProfilPage() {
   const regKey = getDayKey(
     membership?.joined_at ?? profile?.created_at ?? new Date()
   );
-  const possible = daysBetween(regKey, todayKey);
+  const possible = countableDays(regKey, todayKey);
   const total = daySet.size;
   const pct = possible > 0 ? Math.round((total / possible) * 100) : 0;
   const { current, longest } = computeStreaks(daySet, todayKey);
