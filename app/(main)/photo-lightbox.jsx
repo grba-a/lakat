@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { shareCard } from "@/lib/share-card";
 
 // Fullscreen pregled slika sa swipe carouselom (CSS scroll-snap) — tap bilo
 // gdje zatvara (browser guta click nakon touch-scrolla pa swipe NE zatvara);
@@ -11,6 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 export default function PhotoLightbox({ items, startIndex = 0, onClose, children }) {
   const count = items?.length ?? 0;
   const [index, setIndex] = useState(startIndex);
+  const [sharing, setSharing] = useState(false);
   const trackRef = useRef(null);
   const lastScrollRef = useRef(0);
 
@@ -110,6 +112,40 @@ export default function PhotoLightbox({ items, startIndex = 0, onClose, children
           {typeof children === "function" ? children(current) : children}
         </div>
       )}
+
+      <button
+        type="button"
+        disabled={sharing}
+        onClick={async (e) => {
+          e.stopPropagation();
+          setSharing(true);
+          try {
+            await shareCard({ url: current.url, caption: current.caption });
+          } catch {
+            // slika bez CORS-a ili prekinut share — tiho odustani
+          } finally {
+            setSharing(false);
+          }
+        }}
+        className="pressable flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-4 py-2 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+          <path d="m16 6-4-4-4 4" />
+          <path d="M12 2v13" />
+        </svg>
+        {sharing ? "Sekunda..." : "Podijeli"}
+      </button>
       <p className="text-xs text-muted/60">Stisni bilo gdje za zatvoriti</p>
     </div>
   );

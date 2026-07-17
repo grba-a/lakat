@@ -40,7 +40,8 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
 4. **Liga ekipa** (`lib/liga.js`, `/liga` tab — zamijenio /shame): grupe se natječu TJEDNO
    (ponedjeljak 06:00 → ponedjeljak 06:00 po lakat-danima, `weekStartKey`). Bodovi on-the-fly iz
    checkins (NEMA crona ni score tablice): dolazak (jedinstveni user+dan) = +2 (`BOD_DOLAZAK`),
-   ispunjen odaziv na saziv (checkin sa `saziv_id`, jedinstven user+saziv) = +1 (`BOD_ODAZIV`).
+   ispunjen odaziv na saziv (checkin sa `saziv_id`, jedinstven user+saziv) = +1 (`BOD_ODAZIV`),
+   zajednički kadar = +4 (`BOD_KADAR`) po DANU s bar jednom kadar slikom (anti-farm cap).
    Cross-group zbrajanje ide ADMIN klijentom, ali UI smije vidjeti SAMO ime grupe + bodove + broj
    članova — nikad tuđe slike/članove/lokacije. Widget na vrhu Šanka ("🏆 n. u ligi") + puna
    tablica na /liga s prvakom prošlog tjedna. Sirovi bodovi bez normalizacije po veličini grupe —
@@ -61,13 +62,23 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
    na saziv i stvarno došao (checkin sa saziv_id) vs ispario. Broje se samo ZAKLJUČENI sazivi
    (at_time+3h prošao). Titula od 3 odaziva: ≥80% Kremen 💎, ≥50% Pola-pola 🌗, inače Fantom 👻.
    Prikaz SAMO na /profil i /korisnik/[id] — NIKAD push, NIKAD rang (nije novi sram).
+9. **Zajednički kadar** (`checkins.kadar_user_ids uuid[]`, od `supabase-kadar1.sql`): u runda
+   flowu se NAKON editora prikaže picker "tko je u kadru" SAMO ako je još netko danas prisutan
+   (fetch kreće paralelno s kamerom, `presentRef`) — solo runda nema nijedan dodatni klik.
+   Server u `checkIn` validira da su označeni članovi grupe (ne vjeruje klijentu), autor se
+   uvijek dodaje, sprema se samo 2+ u kadru, i samo uz dokaznu sliku. `computeLiga` čita kolonu
+   s fallbackom na select bez nje (ne smije pasti prije primjene SQL-a).
+10. **Share kartice** (`lib/share-card.js` + gumb "Podijeli" u photo-lightbox.jsx): canvas
+   1080×1920 story kartica (blur cover pozadina, slika, LAKAT. wordmark, caption,
+   laktarenje.com) → Web Share API s files, fallback download. Organski marketing — ne dirati
+   branding elemente bez pitanja.
 6. **Registracija**: email, lozinka, username, ime + šifra grupe (join postojeće ili create nove). Šifra grupe je hashirana u `groups.password_hash` (pgcrypto) i provjerava se ISKLJUČIVO server-side preko `verify_group_password` RPC-a (service_role only). Nikad ne slati šifru u klijentski bundle.
 
 ## Baza (Supabase)
-Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `supabase-setup.sql` → `-avatars` → `-faza1..4` → `-grupe1.sql` → ... → `-najave2.sql`. NE kreiraj migracijski framework, NE mijenjaj schemu bez pitanja — dodaj novi `supabase-*.sql` fajl po istoj konvenciji.
+Schema je flat SQL fajlovi primijenjeni ručno u Supabase SQL editoru, redom: `supabase-setup.sql` → `-avatars` → `-faza1..4` → `-grupe1.sql` → ... → `-najave2.sql` → `-saziv1.sql` → `-kadar1.sql`. NE kreiraj migracijski framework, NE mijenjaj schemu bez pitanja — dodaj novi `supabase-*.sql` fajl po istoj konvenciji.
 
 - `profiles`: id (uuid, FK na auth.users), username (unique), avatar_url, active_group_id, created_at
-- `checkins`: id, user_id, group_id, checked_in_at, cancelled_at, photo_url, lat, lng
+- `checkins`: id, user_id, group_id, checked_in_at, cancelled_at, photo_url, lat, lng, saziv_id (nullable FK), kadar_user_ids (uuid[], nullable — tko je u kadru, uklj. autora)
 - `groups`: id, name (unique), password_hash, created_by
 - `group_members`: group_id, user_id, role (admin/member), joined_at
 - `reactions`: checkin_id, user_id, emoji (unique po user/checkin)

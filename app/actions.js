@@ -52,7 +52,7 @@ export async function switchGroup(groupId) {
   return { ok: true };
 }
 
-export async function checkIn(photoUrl, thumbUrl, coords) {
+export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -124,11 +124,31 @@ export async function checkIn(photoUrl, thumbUrl, coords) {
     // saziv je bonus — runda ide dalje i bez njega
   }
 
-  // saziv_id ide u insert samo kad postoji — runda ne smije ovisiti o
-  // tome je li saziv schema već primijenjena
+  // Zajednički kadar: označeni moraju biti članovi grupe (server ne
+  // vjeruje klijentu), autor se uvijek dodaje; sprema se samo ako su u
+  // kadru bar dvoje. Slika bez dokaza ne može nositi kadar.
+  let kadar_user_ids = null;
+  if (photo_url && Array.isArray(kadarIds) && kadarIds.length) {
+    const candidates = [
+      ...new Set(kadarIds.filter((x) => typeof x === "string" && x !== user.id)),
+    ].slice(0, 20);
+    if (candidates.length) {
+      const { data: valid } = await supabase
+        .from("group_members")
+        .select("user_id")
+        .eq("group_id", active.id)
+        .in("user_id", candidates);
+      const clanovi = (valid ?? []).map((v) => v.user_id);
+      if (clanovi.length) kadar_user_ids = [user.id, ...clanovi];
+    }
+  }
+
+  // saziv_id / kadar idu u insert samo kad postoje — runda ne smije
+  // ovisiti o tome je li nova schema već primijenjena
   const checkedInAt = new Date().toISOString();
   const row = { user_id: user.id, group_id: active.id, photo_url, thumb_url, lat, lng };
   if (saziv_id) row.saziv_id = saziv_id;
+  if (kadar_user_ids) row.kadar_user_ids = kadar_user_ids;
   const { error } = await supabase.from("checkins").insert(row);
   if (error) {
     return { error: `Checkin nije prošao: ${error.message}` };

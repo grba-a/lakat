@@ -10,6 +10,7 @@ import {
   bodovaLabel,
   BOD_DOLAZAK,
   BOD_ODAZIV,
+  BOD_KADAR,
   BOD_IZAZOV,
 } from "@/lib/liga";
 
@@ -172,6 +173,11 @@ export default async function LigaPage() {
             📣 Došao na saziv —{" "}
             <span className="font-bold text-foreground">+{BOD_ODAZIV}</span>{" "}
             povrh dolaska
+          </li>
+          <li>
+            👥 Zajednički kadar (2+ na slici) —{" "}
+            <span className="font-bold text-foreground">+{BOD_KADAR}</span>{" "}
+            po danu
           </li>
           <li>
             🎯 Izazov tjedna ispunjen —{" "}

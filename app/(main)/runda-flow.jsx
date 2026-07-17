@@ -4,8 +4,10 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { downscaleToBlob } from "@/lib/image";
+import { getCurrentDayStart } from "@/lib/day";
 import { checkIn, logDrink, undoLastDrink } from "@/app/actions";
 import { drinkInfo } from "@/lib/drinks";
+import Avatar from "./avatar";
 import PhotoEditor from "./photo-editor";
 import Omnitrix from "./omnitrix";
 import BadgeToast from "./badge-toast";
@@ -29,9 +31,14 @@ export default function RundaFlow({ userId }) {
   const [error, setError] = useState(null);
   const [drinkToast, setDrinkToast] = useState(null); // drink key
   const [badgeQueue, setBadgeQueue] = useState([]);
+  // Zajednički kadar: { file, overlay, options } dok korisnik bira tko je
+  // na slici; kadarIds = trenutno označeni
+  const [kadarAsk, setKadarAsk] = useState(null);
+  const [kadarIds, setKadarIds] = useState([]);
   const [isPending, startTransition] = useTransition();
   const cameraRef = useRef(null);
   const geoRef = useRef(null); // promise pokrenut na klik, awaita se pri objavi
+  const presentRef = useRef(null); // tko je danas prisutan — za kadar picker
   const toastTimerRef = useRef(null);
 
   // Zatvorena kamera bez slike (podržano u novijim browserima) → ponudi
@@ -66,10 +73,43 @@ export default function RundaFlow({ userId }) {
     });
   }
 
+  // Danas prisutni ČLANOVI (bez mene) — kandidati za zajednički kadar.
+  // Dvije male query umjesto FK embeda; bilo kakva greška = prazan popis
+  // (kadar je bonus, objava ne smije ovisiti o njemu)
+  async function fetchPresentOthers() {
+    try {
+      const supabase = createClient();
+      const { data: me } = await supabase
+        .from("profiles")
+        .select("active_group_id")
+        .eq("id", userId)
+        .maybeSingle();
+      if (!me?.active_group_id) return [];
+      const { data: rows } = await supabase
+        .from("checkins")
+        .select("user_id")
+        .eq("group_id", me.active_group_id)
+        .is("cancelled_at", null)
+        .gte("checked_in_at", getCurrentDayStart().toISOString());
+      const ids = [...new Set((rows ?? []).map((r) => r.user_id))].filter(
+        (id) => id !== userId
+      );
+      if (!ids.length) return [];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, username, avatar_url")
+        .in("id", ids);
+      return profiles ?? [];
+    } catch {
+      return [];
+    }
+  }
+
   function openCamera() {
     setError(null);
     setAskPhoto(false);
     geoRef.current = requestLocation();
+    presentRef.current = fetchPresentOthers();
     cameraRef.current?.click();
   }
 
@@ -83,12 +123,13 @@ export default function RundaFlow({ userId }) {
     setEditorFile(file);
   }
 
-  async function submitCheckIn(photoUrl, thumbUrl) {
+  async function submitCheckIn(photoUrl, thumbUrl, ids = []) {
     const coords = await (geoRef.current ?? requestLocation());
     const result = await checkIn(
       photoUrl ?? undefined,
       thumbUrl ?? undefined,
-      coords ?? undefined
+      coords ?? undefined,
+      ids.length ? ids : undefined
     );
     if (result?.error) {
       setError(result.error);
@@ -100,12 +141,26 @@ export default function RundaFlow({ userId }) {
     return true;
   }
 
-  // Objava iz editora: bake teksta u sliku, upload u dokazi, checkin,
-  // pa kolo pića
+  // Objava iz editora: ako je još netko prisutan, prvo kratki kadar picker
+  // ("tko je na slici?"); inače ravno u upload — solo runda bez ijednog
+  // dodatnog klika
   function handleEditorPublish(overlay) {
     const file = editorFile;
     setEditorFile(null);
     if (!file) return;
+    startTransition(async () => {
+      const options = await (presentRef.current ?? Promise.resolve([]));
+      if (options.length) {
+        setKadarIds([]);
+        setKadarAsk({ file, overlay, options });
+        return;
+      }
+      doPublish(file, overlay, []);
+    });
+  }
+
+  // Bake teksta u sliku, upload u dokazi, checkin (s kadrom), pa kolo pića
+  function doPublish(file, overlay, ids) {
     setPublishing(true);
     startTransition(async () => {
       try {
@@ -135,7 +190,7 @@ export default function RundaFlow({ userId }) {
           ? null
           : supabase.storage.from("dokazi").getPublicUrl(thumbPath).data.publicUrl;
 
-        const ok = await submitCheckIn(data.publicUrl, thumbPublicUrl);
+        const ok = await submitCheckIn(data.publicUrl, thumbPublicUrl, ids);
         if (ok) setWheelOpen(true);
       } catch {
         setError("Slika nije prošla. Probaj opet ili uđi bez dokaza ko pička.");
@@ -232,6 +287,62 @@ export default function RundaFlow({ userId }) {
           onConfirm={handleConfirmDrink}
           onClose={() => setWheelOpen(false)}
         />
+      )}
+
+      {kadarAsk && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-5 pb-28">
+          <div className="w-full max-w-sm rounded-card border border-white/10 bg-[#131316] p-4">
+            <p className="text-sm font-bold">Tko je s tobom u kadru? 👥</p>
+            <p className="mt-1 text-xs text-muted">
+              Zajednički kadar nosi +4 boda u ligi. Označi pa objavi.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {kadarAsk.options.map((p) => {
+                const on = kadarIds.includes(p.id);
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() =>
+                      setKadarIds((prev) =>
+                        on ? prev.filter((x) => x !== p.id) : [...prev, p.id]
+                      )
+                    }
+                    className={`pressable flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-xs font-bold ${
+                      on
+                        ? "border-accent bg-accent/20 text-accent"
+                        : "border-white/15 text-muted"
+                    }`}
+                  >
+                    <Avatar
+                      username={p.username ?? "?"}
+                      avatarUrl={p.avatar_url}
+                      size={24}
+                      className={on ? "border-accent/50" : ""}
+                    />
+                    {p.username}
+                    {on && " ✓"}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const { file, overlay } = kadarAsk;
+                const ids = kadarIds;
+                setKadarAsk(null);
+                doPublish(file, overlay, ids);
+              }}
+              disabled={isPending}
+              className="pressable-soft mt-4 flex h-12 w-full items-center justify-center rounded-button bg-accent font-display text-lg uppercase tracking-wide text-black disabled:opacity-50"
+            >
+              {kadarIds.length
+                ? `Objavi (${kadarIds.length + 1} u kadru) 👥`
+                : "Sam sam na slici, objavi"}
+            </button>
+          </div>
+        </div>
       )}
 
       {askPhoto && (
