@@ -38,6 +38,8 @@ export default function MapClient({
   profiles,
   initialCheckins,
   initialDrinks = [],
+  mjesta = [],
+  myGroupName = null,
 }) {
   const [rows, setRows] = useState(() => {
     const map = {};
@@ -138,9 +140,19 @@ export default function MapClient({
     }));
   }, [profiles, rows, drinks, dayStartIso]);
 
+  const nasaMjesta = mjesta.filter((m) => m.holder === myGroupName).length;
+
   return (
     <>
-      <MapView markers={markers} />
+      <MapView markers={markers} mjesta={mjesta} myGroupName={myGroupName} />
+      {mjesta.length > 0 && (
+        <p className="mt-3 text-xs text-muted">
+          ⚑ Ekipa s najviše rundi na lokaciji (30 dana) drži to mjesto.
+          {nasaMjesta > 0
+            ? ` Vi držite ${nasaMjesta}.`
+            : " Vi još ne držite ništa. Sramota."}
+        </p>
+      )}
       {markers.length === 0 ? (
         <p className="mt-4 text-sm text-muted">
           Nitko se danas još nije javio s lokacijom. Karta zjapi prazna

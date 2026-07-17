@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { getCurrentDayStart } from "@/lib/day";
+import { computeMjesta } from "@/lib/mjesta";
 import MapClient from "./map-client";
 
 export default async function MapaPage() {
@@ -54,6 +56,15 @@ export default async function MapaPage() {
         .order("logged_at", { ascending: true }),
     ]);
 
+  // Naša mjesta: koje ekipe drže koje lokacije (cross-group, samo imena
+  // grupa + broj rundi) — greška ne ruši mapu
+  let mjesta = [];
+  try {
+    mjesta = await computeMjesta({ admin: createAdminClient() });
+  } catch {
+    // mapa živi i bez mjesta
+  }
+
   return (
     <main className="flex flex-1 flex-col">
       <section className="mt-8">
@@ -72,6 +83,8 @@ export default async function MapaPage() {
         profiles={profiles ?? []}
         initialCheckins={checkins ?? []}
         initialDrinks={drinks ?? []}
+        mjesta={mjesta}
+        myGroupName={active.name}
       />
     </main>
   );

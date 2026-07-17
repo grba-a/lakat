@@ -72,6 +72,11 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
    1080×1920 story kartica (blur cover pozadina, slika, LAKAT. wordmark, caption,
    laktarenje.com) → Web Share API s files, fallback download. Organski marketing — ne dirati
    branding elemente bez pitanja.
+11. **Naša mjesta** (`lib/mjesta.js`, prikaz na /mapa): grid klasteriranje (~130 m) checkina s
+   koordinatama u zadnjih 30 dana, grupa s najviše rundi na lokaciji (min 3) "drži" mjesto —
+   zastavica ⚑ s imenom grupe na Leaflet mapi (mjestaLayer ispod dnevnih markera). Izjednačenje
+   = "ničija zemlja". Cross-group ide ADMIN klijentom, van smije SAMO ime grupe + broj rundi.
+   Sve on-the-fly, bez tablice; push za otimanje mjesta NE postoji (odluka: bez gnjavaže).
 6. **Registracija**: email, lozinka, username, ime + šifra grupe (join postojeće ili create nove). Šifra grupe je hashirana u `groups.password_hash` (pgcrypto) i provjerava se ISKLJUČIVO server-side preko `verify_group_password` RPC-a (service_role only). Nikad ne slati šifru u klijentski bundle.
 
 ## Baza (Supabase)
