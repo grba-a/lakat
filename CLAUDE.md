@@ -123,6 +123,12 @@ Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkin
 - Ako su instalirani frontend/design skillovi (frontend-design ili slično), koristi ih za vizualni identitet.
 
 ## Disciplina rada (VAŽNO)
+- **NIKAD `git push` (= deploy na laktarenje.com) bez eksplicitnog dopuštenja korisnika** —
+  vrijedi i za bugfixeve: pripremi fix, verificiraj, commitaj lokalno, pa PITAJ. App je živ
+  s pravim korisnicima.
+- **Novi featuri idu live TEK s "što je novo" karticom** (obrazac `app/(main)/whats-new.jsx`:
+  glass + accent glow, stagger redovi, X dismiss u localStorage, hardkodirani istek ~2 dana) —
+  korisnici uvijek moraju u appu vidjeti što je novo. Kartica je dio scope-a svakog batcha.
 - Radi ISKLJUČIVO ono što piše u promptu. Svaki prompt završava s "Ne diraj ništa drugo." i to se poštuje doslovno.
 - Ne refaktoriraj postojeći kod bez eksplicitnog zahtjeva.
 - Ne dodavaj dependencije koje nisu tražene.
