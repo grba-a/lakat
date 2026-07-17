@@ -18,6 +18,7 @@ import Link from "next/link";
 import Sank from "./sank";
 import Flashbacks from "./flashbacks";
 import InstallHint from "./install-hint";
+import WhatsNew from "./whats-new";
 import JoinGroupCard from "./join-group-card";
 import WrappedBanner from "./wrapped-banner";
 
@@ -189,6 +190,7 @@ export default async function Home() {
 
   return (
     <main className="flex flex-1 flex-col">
+      <WhatsNew />
       {liga && (
         <Link
           href="/liga"
