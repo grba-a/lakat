@@ -6,6 +6,7 @@ import { getUser, getActiveGroupFor } from "@/lib/auth";
 import { getCurrentDayStart } from "@/lib/day";
 import { computeMjesta } from "@/lib/mjesta";
 import MapClient from "./map-client";
+import BrandPunct from "@/app/brand-punct";
 
 export default async function MapaPage() {
   const user = await getUser();
@@ -69,7 +70,7 @@ export default async function MapaPage() {
     <main className="flex flex-1 flex-col">
       <section className="mt-8">
         <h1 className="font-display text-5xl uppercase leading-none tracking-tight">
-          Gdje su<span className="text-accent">?</span>
+          Gdje su<BrandPunct>?</BrandPunct>
         </h1>
         <p className="mt-3 text-sm text-muted">
           <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />

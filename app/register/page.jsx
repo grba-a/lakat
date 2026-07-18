@@ -4,6 +4,7 @@ import { Suspense, useActionState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { register } from "./actions";
+import BrandPunct from "@/app/brand-punct";
 
 const inputClass =
   "h-14 rounded-field border border-white/10 bg-white/[0.05] px-4 text-base outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-muted/50 focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(74,222,128,0.15)]";
@@ -16,7 +17,7 @@ function RegisterForm() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-5 py-10">
       <h1 className="font-display text-5xl uppercase leading-none tracking-tight">
-        Novi u ekipi<span className="text-accent">?</span>
+        Novi u ekipi<BrandPunct>?</BrandPunct>
       </h1>
       <p className="mt-3 text-sm uppercase tracking-widest text-muted">
         <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />

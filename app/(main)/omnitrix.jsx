@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DRINK_TYPES } from "@/lib/drinks";
+import BrandPunct from "@/app/brand-punct";
 
 const SEGMENT_DEG = 360 / DRINK_TYPES.length;
 const COLORS = ["#4ade80", "#22c55e", "#16a34a"];
@@ -188,7 +189,7 @@ export default function Omnitrix({ pending = false, onConfirm, onClose }) {
 
       <div className="relative flex flex-col items-center gap-6">
         <h2 className="font-display text-4xl uppercase leading-none tracking-wide">
-          Šta piješ<span className="text-accent">?</span>
+          Šta piješ<BrandPunct>?</BrandPunct>
         </h2>
 
         <div

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { digniEkipu, odazoviSe, otkaziSaziv } from "@/app/actions";
 import Avatar from "./avatar";
+import BrandPunct from "@/app/brand-punct";
 
 const timeFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -204,7 +205,7 @@ export default function SazivCard({
             📣 {creator?.username ?? "Netko"} zove na laktanje
           </p>
           <p className="mt-0.5 truncate font-display text-2xl uppercase tracking-wide">
-            {saziv.place_text}
+            <BrandPunct>{saziv.place_text}</BrandPunct>
           </p>
           <p className="text-sm font-bold uppercase tracking-widest text-accent">
             {kadLabel}

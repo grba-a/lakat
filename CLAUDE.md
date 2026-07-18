@@ -133,6 +133,12 @@ Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkin
 - Veliki touch targeti — plus u navbaru i kolo pića moraju biti nemogući za promašiti pijan.
 - Minimalno ekrana, minimalno klikova. Bez nepotrebnih animacija koje troše bateriju.
 - Ako su instalirani frontend/design skillovi (frontend-design ili slično), koristi ih za vizualni identitet.
+- **Brend interpunkcija u display (Anton) fontu** — dio brend voicea, UVIJEK kroz
+  `app/brand-punct.jsx` (BrandPunct): `.` cijela accent zelena; `?` i `!` bijeli glif sa
+  ZELENOM točkom (dvoslojni clip-path, REZ kalibriran za Anton — ne mijenjati bez vizualne
+  provjere). Vrijedi za naslove I user-input u display fontu (saziv place_text). Postojeći
+  ručni `<span className="text-accent">.</span>` spanovi su u skladu s pravilom i smiju ostati;
+  za `?`/`!` NIKAD cijeli znak u zelenoj — samo točka.
 
 ## Disciplina rada (VAŽNO)
 - **NIKAD `git push` (= deploy na laktarenje.com) bez eksplicitnog dopuštenja korisnika** —

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BrandPunct from "@/app/brand-punct";
 
 const STEPS = [
   {
@@ -118,7 +119,7 @@ export default function WelcomePage() {
 
       <section className="mt-16">
         <h1 className="font-display text-6xl uppercase leading-[0.95] tracking-tight">
-          Tko je večeras za šankom<span className="text-accent">?</span>
+          Tko je večeras za šankom<BrandPunct>?</BrandPunct>
         </h1>
         <p className="mt-5 text-lg leading-relaxed text-muted">
           Vidi ekipu uživo. A tko najmanje dolazi... e, to se zna.
