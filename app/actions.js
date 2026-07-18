@@ -9,6 +9,7 @@ import { getActiveGroup, getMyGroups } from "@/lib/groups";
 import { notifyGroup, notifyUser } from "@/lib/push";
 import {
   checkinPushBody,
+  rundaPushBody,
   fomoPushBody,
   najavaTargetPushBody,
   commentPushBody,
@@ -19,10 +20,14 @@ import {
   mjestoOsvojenoPushBody,
 } from "@/lib/push-copy";
 import { detectOtimanje } from "@/lib/mjesta";
+import { distanceM, KADAR_RADIUS_M } from "@/lib/geo";
 import { evaluateBadges } from "@/lib/badges";
 import { drinkInfo } from "@/lib/drinks";
 
 const FOMO_MIN_PRESENT = 3;
+// Ne-prve runde šalju push, ali max 1× po autoru unutar ovog prozora —
+// da aktivna večer ne pretvori grupu u notifikacijski vodopad
+const RUNDA_PUSH_COOLDOWN_MS = 45 * 60 * 1000;
 
 export async function logout() {
   const supabase = await createClient();
@@ -98,20 +103,23 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
   const dayStart = getCurrentDayStart();
 
   // Više rundi dnevno je dozvoljeno (svaka runda = nova slika + piće);
-  // prva runda dana je "check-in" i jedina šalje push grupi
+  // prva runda dana je "check-in", ostale šalju push uz cooldown po autoru
+  // (zato treba i VRIJEME prethodne runde, ne samo postoji li)
   const { data: existing, error: checkError } = await supabase
     .from("checkins")
-    .select("id")
+    .select("checked_in_at")
     .eq("user_id", user.id)
     .eq("group_id", active.id)
     .is("cancelled_at", null)
     .gte("checked_in_at", dayStart.toISOString())
+    .order("checked_in_at", { ascending: false })
     .limit(1);
 
   if (checkError) {
     return { error: `Nešto je puklo: ${checkError.message}` };
   }
   const isFirstToday = !existing?.length;
+  const prevRundaAt = existing?.[0]?.checked_in_at ?? null;
 
   // Runda nastala u prozoru živog saziva se veže na njega (pouzdanost +
   // liga bodovi kasnije); prozor = sat prije at_time do 3h nakon
@@ -128,11 +136,13 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
     // saziv je bonus — runda ide dalje i bez njega
   }
 
-  // Zajednički kadar: označeni moraju biti članovi grupe (server ne
-  // vjeruje klijentu), autor se uvijek dodaje; sprema se samo ako su u
-  // kadru bar dvoje. Slika bez dokaza ne može nositi kadar.
+  // Zajednički kadar: označeni moraju biti članovi grupe I fizički blizu
+  // (server ne vjeruje klijentu), autor se uvijek dodaje; sprema se samo
+  // ako su u kadru bar dvoje. Slika bez dokaza ne može nositi kadar.
+  // STROGO lokacijski: bez autorovih koordinata kadar se odbacuje, a
+  // tagirani mora imati današnju rundu s koordinatama unutar radijusa.
   let kadar_user_ids = null;
-  if (photo_url && Array.isArray(kadarIds) && kadarIds.length) {
+  if (photo_url && lat != null && lng != null && Array.isArray(kadarIds) && kadarIds.length) {
     const candidates = [
       ...new Set(kadarIds.filter((x) => typeof x === "string" && x !== user.id)),
     ].slice(0, 20);
@@ -143,7 +153,32 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
         .eq("group_id", active.id)
         .in("user_id", candidates);
       const clanovi = (valid ?? []).map((v) => v.user_id);
-      if (clanovi.length) kadar_user_ids = [user.id, ...clanovi];
+      if (clanovi.length) {
+        try {
+          const { data: tudjeRunde } = await supabase
+            .from("checkins")
+            .select("user_id, lat, lng")
+            .eq("group_id", active.id)
+            .is("cancelled_at", null)
+            .in("user_id", clanovi)
+            .not("lat", "is", null)
+            .not("lng", "is", null)
+            .gte("checked_in_at", dayStart.toISOString())
+            .order("checked_in_at", { ascending: false });
+          // redovi su desc — prvi po korisniku je njegova najnovija runda
+          const seen = new Set();
+          const blizu = [];
+          for (const r of tudjeRunde ?? []) {
+            if (seen.has(r.user_id)) continue;
+            seen.add(r.user_id);
+            if (distanceM({ lat, lng }, r) <= KADAR_RADIUS_M) blizu.push(r.user_id);
+          }
+          if (blizu.length) kadar_user_ids = [user.id, ...blizu];
+        } catch {
+          // provjera je best-effort — bez nje kadar se (strogo) odbacuje,
+          // runda ide dalje
+        }
+      }
     }
   }
 
@@ -230,11 +265,20 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
   }
 
   // Push ostalima iz grupe — prva runda dana šalje uvijek (kadar kopija
-  // ima prednost); ostale runde SAMO ako su prva kadar slika dana
-  // (max +1 push/dan). Ne smije srušiti checkin ako slanje pukne.
+  // ima prednost); ostale runde šalju rundaPushBody uz cooldown po autoru
+  // (RUNDA_PUSH_COOLDOWN_MS), a kadar kopija se koristi samo za prvu kadar
+  // sliku dana u grupi. Ne smije srušiti checkin ako slanje pukne.
   if (!isFirstToday) {
-    if (kadarBody && insertedId) {
-      try {
+    if (
+      prevRundaAt &&
+      Date.now() - new Date(prevRundaAt).getTime() < RUNDA_PUSH_COOLDOWN_MS
+    ) {
+      return { ok: true, newBadges };
+    }
+    try {
+      let body = null;
+      let excludeIds = kadar_user_ids ?? [];
+      if (kadarBody && insertedId) {
         const { count } = await supabase
           .from("checkins")
           .select("id", { count: "exact", head: true })
@@ -243,18 +287,25 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
           .not("kadar_user_ids", "is", null)
           .gte("checked_in_at", dayStart.toISOString())
           .neq("id", insertedId);
-        if ((count ?? 0) === 0) {
-          await notifyGroup({
-            groupId: active.id,
-            groupName: active.name,
-            senderId: user.id,
-            excludeIds: kadar_user_ids,
-            body: kadarBody,
-          });
-        }
-      } catch {
-        // best-effort
+        if ((count ?? 0) === 0) body = kadarBody;
       }
+      if (!body) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", user.id)
+          .maybeSingle();
+        body = rundaPushBody(profile?.username ?? "Netko");
+      }
+      await notifyGroup({
+        groupId: active.id,
+        groupName: active.name,
+        senderId: user.id,
+        excludeIds,
+        body,
+      });
+    } catch {
+      // best-effort
     }
     return { ok: true, newBadges };
   }

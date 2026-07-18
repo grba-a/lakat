@@ -67,7 +67,7 @@ export default async function KorisnikPage({ params }) {
 
   const stats = [
     { value: total, label: "dolazaka" },
-    { value: `${pct}%`, label: "dolaznost" },
+    { value: `${pct}%`, label: "aktivnost" },
     { value: current, label: "streak sad" },
     { value: longest, label: "najduži streak" },
   ];

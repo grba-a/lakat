@@ -145,13 +145,13 @@ input,
   display: inline-block;
   animation: boot-pulse 1.4s var(--ease-fluid) infinite;
 }
-/* U instaliranom PWA-u (standalone) nema "brzog browser loada" pa nema ni
-   razloga za odgodu — prikaži splash ODMAH da ne bude crne rupe između iOS
-   native splasha (koji se makne) i boot splasha (koji bi inače kasnio 300ms) */
+/* U instaliranom PWA-u iOS native splash (ikona) drži ekran do prvog painta,
+   a stranica je server-renderirana pa je nakon painta već vizualno kompletna —
+   boot splash bi bio DRUGI loading ekran zaredom (ikona pa wordmark).
+   Zato u standalone modu ne postoji; živi samo u običnom browseru. */
 @media (display-mode: standalone) {
   .boot-splash {
-    opacity: 1;
-    animation: none;
+    display: none;
   }
 }
 /* Uklanjanje na hidraciji — pregazi fade-in i nježno izađe (specifičnost
@@ -222,23 +222,19 @@ body::before {
     radial-gradient(50% 35% at 90% 110%, rgba(255, 255, 255, 0.03), transparent 70%);
 }
 
-/* Prijelazi između tabova (Next experimental viewTransition) */
+/* Prijelazi između tabova (Next experimental viewTransition) — brzi
+   simetrični crossfade BEZ delaya i translate-a: klik na tab okine dvije
+   tranzicije zaredom (skeleton pa sadržaj), pa svaki delay/poskok postaje
+   vidljivo treperenje */
 ::view-transition-old(.page-cross) {
-  animation: 150ms var(--ease-fluid) both vt-fade reverse;
+  animation: 120ms var(--ease-fluid) both vt-fade reverse;
 }
 ::view-transition-new(.page-cross) {
-  animation:
-    200ms var(--ease-fluid) 100ms both vt-fade,
-    300ms var(--ease-fluid) both vt-rise;
+  animation: 150ms var(--ease-fluid) both vt-fade;
 }
 @keyframes vt-fade {
   from {
     opacity: 0;
-  }
-}
-@keyframes vt-rise {
-  from {
-    transform: translateY(10px);
   }
 }
 

@@ -7,6 +7,7 @@ import { downscaleToBlob } from "@/lib/image";
 import { getCurrentDayStart } from "@/lib/day";
 import { checkIn, logDrink, undoLastDrink } from "@/app/actions";
 import { drinkInfo } from "@/lib/drinks";
+import { distanceM, KADAR_RADIUS_M } from "@/lib/geo";
 import Avatar from "./avatar";
 import PhotoEditor from "./photo-editor";
 import Omnitrix from "./omnitrix";
@@ -74,7 +75,9 @@ export default function RundaFlow({ userId }) {
   }
 
   // Danas prisutni ČLANOVI (bez mene) — kandidati za zajednički kadar.
-  // Dvije male query umjesto FK embeda; bilo kakva greška = prazan popis
+  // STROGO lokacijski: broji se samo najnovija runda S koordinatama, tko
+  // je nema ne nudi se u pickeru (filter po radijusu je u handleEditorPublish
+  // kad stigne i moja lokacija). Bilo kakva greška = prazan popis
   // (kadar je bonus, objava ne smije ovisiti o njemu)
   async function fetchPresentOthers() {
     try {
@@ -87,19 +90,27 @@ export default function RundaFlow({ userId }) {
       if (!me?.active_group_id) return [];
       const { data: rows } = await supabase
         .from("checkins")
-        .select("user_id")
+        .select("user_id, lat, lng")
         .eq("group_id", me.active_group_id)
         .is("cancelled_at", null)
-        .gte("checked_in_at", getCurrentDayStart().toISOString());
-      const ids = [...new Set((rows ?? []).map((r) => r.user_id))].filter(
-        (id) => id !== userId
-      );
-      if (!ids.length) return [];
+        .gte("checked_in_at", getCurrentDayStart().toISOString())
+        .order("checked_in_at", { ascending: false });
+      // rows su desc — prvi red po korisniku je njegova najnovija runda s koordinatama
+      const lastCoords = new Map();
+      for (const r of rows ?? []) {
+        if (r.user_id === userId || r.lat == null || r.lng == null) continue;
+        if (!lastCoords.has(r.user_id)) lastCoords.set(r.user_id, r);
+      }
+      if (!lastCoords.size) return [];
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, username, avatar_url")
-        .in("id", ids);
-      return profiles ?? [];
+        .in("id", [...lastCoords.keys()]);
+      return (profiles ?? []).map((p) => ({
+        ...p,
+        lat: lastCoords.get(p.id).lat,
+        lng: lastCoords.get(p.id).lng,
+      }));
     } catch {
       return [];
     }
@@ -141,15 +152,21 @@ export default function RundaFlow({ userId }) {
     return true;
   }
 
-  // Objava iz editora: ako je još netko prisutan, prvo kratki kadar picker
-  // ("tko je na slici?"); inače ravno u upload — solo runda bez ijednog
-  // dodatnog klika
+  // Objava iz editora: ako je netko prisutan UNUTAR radijusa, prvo kratki
+  // kadar picker ("tko je na slici?"); inače ravno u upload — solo runda
+  // bez ijednog dodatnog klika. STROGO: bez moje lokacije nema pickera.
   function handleEditorPublish(overlay) {
     const file = editorFile;
     setEditorFile(null);
     if (!file) return;
     startTransition(async () => {
-      const options = await (presentRef.current ?? Promise.resolve([]));
+      const [candidates, coords] = await Promise.all([
+        presentRef.current ?? Promise.resolve([]),
+        geoRef.current ?? requestLocation(),
+      ]);
+      const options = coords
+        ? candidates.filter((p) => distanceM(coords, p) <= KADAR_RADIUS_M)
+        : [];
       if (options.length) {
         setKadarIds([]);
         setKadarAsk({ file, overlay, options });

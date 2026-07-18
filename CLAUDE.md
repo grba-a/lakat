@@ -26,7 +26,7 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
 - Middleware fajl se zove `proxy.js` (Next 16 preimenovanje middleware→proxy); u njemu se auth provjerava s `getClaims()` (lokalna JWT validacija), NE `getUser()` (mrežni roundtrip po requestu)
 
 ## Pravila igre (poslovna logika)
-1. **Runda (check-in)**: zeleni PLUS u sredini navbara (TikTok stil, `plus-button.jsx` + `runda-flow.jsx`, lazy iz `nav.jsx`) → kamera → **photo editor** (`photo-editor.jsx`: pregled + opcionalni IG-story tekst, 4 stila, drag pozicija; tekst se peče canvasom u JPEG prije uploada, thumb iz pečenog bloba) → "Objavi" upisuje red u `checkins` → **omnitrix kolo pića** (`omnitrix.jsx`: okreće se prstom 1:1, inercija + snap na segment, odabrano je pod kazaljkom, "Potvrdi" = logDrink; X preskače; NE random, potpuno neprozirni overlay). **Više rundi dnevno je dozvoljeno** — prva slika dana je check-in (jedina šalje push grupi, `isFirstToday` u checkIn akciji), svaka sljedeća je nova runda (nova slika u Slike dana + piće). Piće se logira ISKLJUČIVO kroz taj flow; undo = toast "↩ Krivi tap" (~8s) nakon zapisanog pića. Veliki gumb "TU SAM" i drink-bar više NE postoje. **"Ipak bježim" je maknut** — `cancelCheckIn` akcija ne postoji, `checkins.cancelled_at` kolona ostaje u bazi zbog starih redova (filteri `.is("cancelled_at", null)` ostaju).
+1. **Runda (check-in)**: zeleni PLUS u sredini navbara (TikTok stil, `plus-button.jsx` + `runda-flow.jsx`, lazy iz `nav.jsx`) → kamera → **photo editor** (`photo-editor.jsx`: pregled + opcionalni IG-story tekst, 4 stila, drag pozicija; tekst se peče canvasom u JPEG prije uploada, thumb iz pečenog bloba) → "Objavi" upisuje red u `checkins` → **omnitrix kolo pića** (`omnitrix.jsx`: okreće se prstom 1:1, inercija + snap na segment, odabrano je pod kazaljkom, "Potvrdi" = logDrink; X preskače; NE random, potpuno neprozirni overlay). **Više rundi dnevno je dozvoljeno** — prva slika dana je check-in (checkin push kopija, `isFirstToday` u checkIn akciji), svaka sljedeća je nova runda (nova slika u Slike dana + piće) i TAKOĐER šalje push (`rundaPushBody`) uz cooldown po autoru: `RUNDA_PUSH_COOLDOWN_MS` = 45 min od prethodne autorove runde, inače se push preskače (objava prolazi). Popis "Za šankom" prikazuje ZADNJU objavljenu sliku korisnika i njeno vrijeme (fallback: najnoviji checkin bez slike). Piće se logira ISKLJUČIVO kroz taj flow; undo = toast "↩ Krivi tap" (~8s) nakon zapisanog pića. Veliki gumb "TU SAM" i drink-bar više NE postoje. **"Ipak bježim" je maknut** — `cancelCheckIn` akcija ne postoji, `checkins.cancelled_at` kolona ostaje u bazi zbog starih redova (filteri `.is("cancelled_at", null)` ostaju).
 1b. **Saziv — u UI-ju se zove "POZIV NA LAKTANJE"** (gumb za slanje: "ZOVI NAROD"; interni
    nazivi u kodu ostaju sazivi/digniEkipu). (`saziv-card.jsx` na vrhu Šanka): bilo koji član digne okupljanje —
    mjesto (max 40 znakova) + vrijeme ("Sad" ili time picker; prošlo vrijeme = sutra) → push cijeloj
@@ -53,8 +53,8 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
    bazi, `badgeInfo()` za njih vraća null pa se ne renderiraju).
 6. **Izazov tjedna** (`lib/izazovi.js`): NEMA tablice ni crona — izazov se deterministički bira
    FNV-1a hashom (group_id + weekKey) iz poola `IZAZOVI`, ispunjenje se detektira iz checkina
-   tjedna (`checkIzazov`), bodovi +10 idu kroz `computeLiga` (`BOD_IZAZOV`). Prikaz: kompaktna
-   kartica na Šanku ispod saziva (prop `izazov` u `sank.jsx`, ✓ kad je ispunjen) + marker u ligi.
+   tjedna (`checkIzazov`), bodovi +10 idu kroz `computeLiga` (`BOD_IZAZOV`). Prikaz: kartica na
+   /liga između prvaka i tablice (Šank NEMA izazov karticu — maknuta u 2.2) + marker u ligi.
 7. **Grupni streak**: dan s bar 1 rundom bilo koga iz grupe = streak dan; derivat iz istih
    checkina (60-dnevni prozor Šanka), prikaz "🔥 n" u liga widgetu. Push "streak ekipe umire"
    ide iz POSTOJEĆEG crona `/api/cron/streak-visi` (`grupniStreakVisiPushBody`, max 1× navečer,
@@ -65,14 +65,18 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
    Prikaz SAMO na /profil i /korisnik/[id] — NIKAD push, NIKAD rang (nije novi sram).
 9. **Zajednički kadar** (`checkins.kadar_user_ids uuid[]`, od `supabase-kadar1.sql`): u runda
    flowu se NAKON editora prikaže picker "tko je u kadru" SAMO ako je još netko danas prisutan
-   (fetch kreće paralelno s kamerom, `presentRef`) — solo runda nema nijedan dodatni klik.
-   Server u `checkIn` validira da su označeni članovi grupe (ne vjeruje klijentu), autor se
-   uvijek dodaje, sprema se samo 2+ u kadru, i samo uz dokaznu sliku. `computeLiga` čita kolonu
-   s fallbackom na select bez nje (ne smije pasti prije primjene SQL-a).
+   UNUTAR RADIJUSA (fetch kreće paralelno s kamerom, `presentRef`) — solo runda nema nijedan
+   dodatni klik. **STROGO lokacijski** (`lib/geo.js`: `KADAR_RADIUS_M` = 500, haversine
+   `distanceM`): kandidat je samo član čija je najnovija današnja runda S koordinatama unutar
+   500 m od autora; bez autorove lokacije picker se preskače. Server u `checkIn` validira
+   članstvo I udaljenost (ne vjeruje klijentu; bez autorovih koordinata kadar se odbacuje),
+   autor se uvijek dodaje, sprema se samo 2+ u kadru, i samo uz dokaznu sliku. `computeLiga`
+   čita kolonu s fallbackom na select bez nje (ne smije pasti prije primjene SQL-a).
    **Kadar push** (`kadarPushBody`: "X i Y laktaju skupa. A di ste vi?"): prva runda dana s
-   kadrom koristi kadar kopiju UMJESTO checkin kopije; ne-prva runda šalje kadar push SAMO ako
-   je to prva kadar slika dana u grupi (max +1 push/dan); tagirani su `excludeIds`. Face-scan
-   prepoznavanje je RAZMOTRENO I ODBIJENO (GDPR biometrija) — tagovi rade isti posao.
+   kadrom koristi kadar kopiju UMJESTO checkin kopije; ne-prva runda (unutar runda-push
+   cooldowna, vidi #1) koristi kadar kopiju SAMO za prvu kadar sliku dana u grupi, inače
+   `rundaPushBody`; tagirani su `excludeIds`. Face-scan prepoznavanje je RAZMOTRENO I
+   ODBIJENO (GDPR biometrija) — tagovi rade isti posao.
 10. **Share kartice** (`lib/share-card.js` + gumb "Podijeli" u photo-lightbox.jsx): canvas
    1080×1920 story kartica (blur cover pozadina, slika, LAKAT. wordmark, caption,
    laktarenje.com) → Web Share API s files, fallback download. Organski marketing — ne dirati
@@ -134,9 +138,10 @@ Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkin
 - **NIKAD `git push` (= deploy na laktarenje.com) bez eksplicitnog dopuštenja korisnika** —
   vrijedi i za bugfixeve: pripremi fix, verificiraj, commitaj lokalno, pa PITAJ. App je živ
   s pravim korisnicima.
-- **Novi featuri idu live TEK s "što je novo" karticom** (obrazac `app/(main)/whats-new.jsx`:
-  glass + accent glow, stagger redovi, X dismiss u localStorage, hardkodirani istek ~2 dana) —
-  korisnici uvijek moraju u appu vidjeti što je novo. Kartica je dio scope-a svakog batcha.
+- **"Što je novo" kartica se radi SAMO na izričitu riječ korisnika** — on odlučuje kada je
+  update dovoljno velik da je zaslužuje (pravilo od 2026-07-18). NE raditi je proaktivno po
+  batchu. Obrazac kad je zatraži: `app/(main)/whats-new.jsx` (glass + accent glow, stagger
+  redovi, X dismiss u localStorage, hardkodirani istek ~2 dana od deploya).
 - Radi ISKLJUČIVO ono što piše u promptu. Svaki prompt završava s "Ne diraj ništa drugo." i to se poštuje doslovno.
 - Ne refaktoriraj postojeći kod bez eksplicitnog zahtjeva.
 - Ne dodavaj dependencije koje nisu tražene.

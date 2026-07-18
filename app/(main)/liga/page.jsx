@@ -65,6 +65,7 @@ export default async function LigaPage() {
   ]);
 
   const myRank = table.findIndex((g) => g.id === active.id) + 1;
+  const mojIzazov = myRank > 0 ? table[myRank - 1].izazov : null;
   const prevWinners = prevTable.filter(
     (g) => g.points > 0 && g.points === prevTable[0]?.points
   );
@@ -92,6 +93,35 @@ export default async function LigaPage() {
             </p>
             <p className="mt-1 text-sm text-muted">
               {bodovaLabel(prevWinners[0].points)}. Skidamo kapu, dižemo čaše.
+            </p>
+          </div>
+        </section>
+      )}
+
+      {mojIzazov && (
+        <section className="mt-6">
+          <div
+            className={`rounded-card border px-5 py-4 ${
+              mojIzazov.done
+                ? "border-accent/30 bg-accent/[0.06]"
+                : "border-white/10 bg-white/[0.03]"
+            }`}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
+              🎯 Izazov tjedna · +{BOD_IZAZOV} u ligi
+            </p>
+            <p
+              className={`mt-1 font-display text-2xl uppercase leading-none tracking-tight ${
+                mojIzazov.done ? "text-accent" : ""
+              }`}
+            >
+              {mojIzazov.label}
+              {mojIzazov.done && " ✓"}
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              {mojIzazov.done
+                ? "Ispunjeno. Bodovi su vaši, jetra je vaš problem."
+                : mojIzazov.description}
             </p>
           </div>
         </section>
@@ -182,7 +212,7 @@ export default async function LigaPage() {
           <li>
             🎯 Izazov tjedna ispunjen —{" "}
             <span className="font-bold text-foreground">+{BOD_IZAZOV}</span>{" "}
-            (novi svaki ponedjeljak, piše na Šanku)
+            (novi svaki ponedjeljak, piše gore)
           </li>
         </ul>
         <p className="mt-3 text-xs text-muted">

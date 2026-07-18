@@ -44,7 +44,6 @@ export default function Sank({
   monthDrinkCount = 0,
   initialSaziv = null,
   initialOdazivi = [],
-  izazov = null,
 }) {
   // Svi današnji checkin REDOVI po id-u (korisnik može imati više rundi
   // dnevno). Realtime INSERT dodaje red, UPDATE mijenja po id-u.
@@ -182,15 +181,27 @@ export default function Sank({
     return () => clearInterval(timer);
   }, []);
 
-  // Po korisniku: najraniji aktivni checkin (vrijeme dolaska + slika) i
+  // Po korisniku: najnoviji aktivni checkin (prisutnost) + najnovija runda
+  // SA SLIKOM (kartica pokazuje zadnju objavljenu sliku i njeno vrijeme) i
   // najsvježija živa najava. Tko nema ništa od toga, ne prikazuje se.
   const { present, arriving, incomingByTarget } = useMemo(() => {
     const byUser = new Map();
     for (const row of Object.values(rows)) {
       if (row.cancelled_at || row.checked_in_at < dayStartIso) continue;
-      const first = byUser.get(row.user_id);
-      if (!first || row.checked_in_at < first.checked_in_at) {
-        byUser.set(row.user_id, row);
+      const cur = byUser.get(row.user_id);
+      if (!cur) {
+        byUser.set(row.user_id, {
+          latest: row,
+          photoRow: row.photo_url ? row : null,
+        });
+        continue;
+      }
+      if (row.checked_in_at > cur.latest.checked_in_at) cur.latest = row;
+      if (
+        row.photo_url &&
+        (!cur.photoRow || row.checked_in_at > cur.photoRow.checked_in_at)
+      ) {
+        cur.photoRow = row;
       }
     }
 
@@ -219,15 +230,18 @@ export default function Sank({
     const arriving = [];
     const incomingByTarget = new Map();
     for (const p of profiles) {
-      const first = byUser.get(p.id);
+      const entry = byUser.get(p.id);
       const najava = arrivingAt.get(p.id);
-      if (first) {
+      if (entry) {
+        // Prikazuje se zadnja slika i njeno vrijeme; bez ijedne slike
+        // fallback na vrijeme najnovijeg checkina
+        const shown = entry.photoRow ?? entry.latest;
         present.push({
           ...p,
-          checkinId: first.id,
-          arrivedAt: first.checked_in_at,
-          photoUrl: first.photo_url ?? null,
-          thumbUrl: first.thumb_url ?? null,
+          checkinId: shown.id,
+          arrivedAt: shown.checked_in_at,
+          photoUrl: entry.photoRow?.photo_url ?? null,
+          thumbUrl: entry.photoRow?.thumb_url ?? null,
           drinkCount: drinkCountByUser.get(p.id) ?? 0,
         });
       } else if (najava) {
@@ -391,32 +405,6 @@ export default function Sank({
         onSazivGone={() => setSaziv(null)}
         onError={setError}
       />
-
-      {izazov && (
-        <div
-          className={`mt-2 flex items-center justify-between rounded-card border px-4 py-2.5 ${
-            izazov.done
-              ? "border-accent/30 bg-accent/[0.06]"
-              : "border-white/10 bg-white/[0.03]"
-          }`}
-        >
-          <span className="flex min-w-0 flex-col">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
-              🎯 Izazov tjedna · +10 u ligi
-            </span>
-            <span
-              className={`truncate text-sm font-bold ${izazov.done ? "text-accent" : ""}`}
-            >
-              {izazov.label} — {izazov.description}
-            </span>
-          </span>
-          {izazov.done && (
-            <span className="shrink-0 text-lg text-accent" aria-label="Ispunjeno">
-              ✓
-            </span>
-          )}
-        </div>
-      )}
 
       {!iAmPresent && (
         <div className="mt-4 rounded-card border border-accent/25 bg-accent/[0.06] px-4 py-3 text-center">

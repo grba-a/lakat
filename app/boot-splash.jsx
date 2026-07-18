@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 // se vidi čim prvi bajtovi stignu — pokriva "crni ekran" dok se JS skida i
 // app hidrira na sporoj vezi. Fade-in kasni ~300ms, pa ga brzi korisnici
 // (hidracija < 300ms) nikad ne vide. Uklanja se na hidraciji (useEffect).
+// U instaliranom PWA-u je skriven CSS-om (display:none u globals.css) —
+// native iOS splash tamo već pokriva boot, dva splasha zaredom su treperila.
 export default function BootSplash() {
   const [leaving, setLeaving] = useState(false);
   const [gone, setGone] = useState(false);
