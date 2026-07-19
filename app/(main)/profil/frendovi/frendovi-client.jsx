@@ -5,10 +5,9 @@ import { useRouter } from "next/navigation";
 import Avatar from "../../avatar";
 import {
   sendFriendRequest,
+  sendFriendRequestTo,
   respondFriendRequest,
   removeFriend,
-  inviteToGroup,
-  respondGroupInvite,
 } from "./actions";
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
@@ -44,35 +43,7 @@ function Msg({ state }) {
   return null;
 }
 
-function InviteSheet({ friendId, groups, onClose, onAction }) {
-  return (
-    <div className="glass mt-2 flex flex-col gap-2 rounded-card p-3">
-      <p className="text-xs font-bold uppercase tracking-widest text-muted">
-        Zovi u grupu
-      </p>
-      {groups.length === 0 ? (
-        <p className="text-xs text-muted">Nisi ni u jednoj grupi.</p>
-      ) : (
-        groups.map((g) => (
-          <button
-            key={g.id}
-            type="button"
-            onClick={() => {
-              onAction(() => inviteToGroup(g.id, friendId));
-              onClose();
-            }}
-            className="surface-2 pressable-soft flex h-11 items-center justify-between rounded-button px-3 text-sm font-bold"
-          >
-            {g.name}
-          </button>
-        ))
-      )}
-    </div>
-  );
-}
-
-function FriendRow({ friend, groups, onAction, style }) {
-  const [open, setOpen] = useState(false);
+function FriendRow({ friend, onAction, style }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
   const presence = presenceLabel(friend.last_seen_at);
 
@@ -102,40 +73,21 @@ function FriendRow({ friend, groups, onAction, style }) {
             </span>
           </span>
         </span>
-        <span className="flex shrink-0 gap-1.5">
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="pressable-soft rounded-full border border-accent/25 bg-accent/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-accent"
-          >
-            Zovi
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (confirmRemove) {
-                setConfirmRemove(false);
-                onAction(() => removeFriend(friend.friendshipId));
-              } else {
-                setConfirmRemove(true);
-              }
-            }}
-            className="pressable-soft rounded-full border border-danger/30 bg-danger/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-danger"
-          >
-            {confirmRemove ? "Sigurno?" : "Makni"}
-          </button>
-        </span>
+        <button
+          type="button"
+          onClick={() => {
+            if (confirmRemove) {
+              setConfirmRemove(false);
+              onAction(() => removeFriend(friend.friendshipId));
+            } else {
+              setConfirmRemove(true);
+            }
+          }}
+          className="pressable-soft shrink-0 rounded-full border border-danger/30 bg-danger/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-danger"
+        >
+          {confirmRemove ? "Sigurno?" : "Makni"}
+        </button>
       </div>
-      {open && (
-        <div className="px-4 pb-3">
-          <InviteSheet
-            friendId={friend.id}
-            groups={groups}
-            onClose={() => setOpen(false)}
-            onAction={onAction}
-          />
-        </div>
-      )}
     </li>
   );
 }
@@ -145,8 +97,7 @@ export default function FrendoviClient({
   friends,
   incoming,
   outgoing,
-  invites,
-  groups,
+  suggestions = [],
 }) {
   const router = useRouter();
   const [actionMsg, setActionMsg] = useState(null);
@@ -154,6 +105,7 @@ export default function FrendoviClient({
   const [code, setCode] = useState("");
   const [addPending, setAddPending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [sentTo, setSentTo] = useState(() => new Set());
 
   function runAction(fn) {
     setActionMsg(null);
@@ -176,6 +128,16 @@ export default function FrendoviClient({
         setCode("");
         router.refresh();
       }
+    });
+  }
+
+  function handleSuggestion(id) {
+    setActionMsg(null);
+    setSentTo((prev) => new Set([...prev, id]));
+    startTransition(async () => {
+      const result = await sendFriendRequestTo(id);
+      setActionMsg(result ?? null);
+      if (result?.ok) router.refresh();
     });
   }
 
@@ -249,37 +211,39 @@ export default function FrendoviClient({
         </div>
       )}
 
-      {invites.length > 0 && (
+      {suggestions.length > 0 && (
         <section className="mt-8">
           <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
-            Pozivi u grupu
+            Možda se znate
           </h2>
           <ul className="mt-4 flex flex-col gap-2">
-            {invites.map((inv) => (
+            {suggestions.map((s) => (
               <li
-                key={inv.id}
+                key={s.id}
                 className="surface-2 flex min-h-14 items-center justify-between gap-2 rounded-row px-4 py-2"
               >
-                <span className="text-sm">
-                  <span className="font-bold">{inv.inviterUsername}</span> te zove u{" "}
-                  <span className="font-bold text-accent">{inv.groupName}</span>
+                <span className="flex items-center gap-3 font-bold">
+                  <Avatar username={s.username} avatarUrl={s.avatar_url} size={32} />
+                  <span className="flex flex-col">
+                    {s.username}
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
+                      {s.mutual}{" "}
+                      {s.mutual === 1
+                        ? "zajednički pajdaš"
+                        : s.mutual <= 4
+                          ? "zajednička pajdaša"
+                          : "zajedničkih pajdaša"}
+                    </span>
+                  </span>
                 </span>
-                <span className="flex shrink-0 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => runAction(() => respondGroupInvite(inv.id, true))}
-                    className="pressable-soft rounded-full border border-accent/25 bg-accent/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-accent"
-                  >
-                    Upadam
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => runAction(() => respondGroupInvite(inv.id, false))}
-                    className="pressable-soft rounded-full border border-danger/30 bg-danger/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-danger"
-                  >
-                    Odbij
-                  </button>
-                </span>
+                <button
+                  type="button"
+                  onClick={() => handleSuggestion(s.id)}
+                  disabled={sentTo.has(s.id)}
+                  className="pressable-soft shrink-0 rounded-full border border-accent/25 bg-accent/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-accent disabled:opacity-50"
+                >
+                  {sentTo.has(s.id) ? "Poslano" : "Dodaj"}
+                </button>
               </li>
             ))}
           </ul>
@@ -335,7 +299,6 @@ export default function FrendoviClient({
             <FriendRow
               key={f.friendshipId}
               friend={f}
-              groups={groups}
               onAction={runAction}
               style={{ "--stagger-i": Math.min(i, 8) }}
             />

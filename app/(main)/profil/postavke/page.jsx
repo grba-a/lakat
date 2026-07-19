@@ -1,55 +1,21 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth";
-import { getMyGroups } from "@/lib/groups";
 import { logout } from "@/app/actions";
 import PushToggle from "../push-toggle";
 import UsernameForm from "../username-form";
 import PasswordForm from "../password-form";
-import MojeGrupe from "./moje-grupe";
 
 export default async function PostavkePage() {
   const user = await getUser();
   if (!user) redirect("/login");
   const supabase = await createClient();
 
-  const [{ data: profile }, groups] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("username")
-      .eq("id", user.id)
-      .maybeSingle(),
-    getMyGroups(supabase, user.id),
-  ]);
-
-  // Članovi svih mojih grupa u jednom upitu (RLS pušta samo vlastite grupe)
-  const groupIds = groups.map((g) => g.id);
-  const [{ data: memberRows }, { data: codeRows }] = groupIds.length
-    ? await Promise.all([
-        supabase
-          .from("group_members")
-          .select("group_id, user_id, role, profiles(username)")
-          .in("group_id", groupIds)
-          .order("joined_at", { ascending: true }),
-        supabase
-          .from("groups")
-          .select("id, invite_code")
-          .in("id", groupIds),
-      ])
-    : [{ data: [] }, { data: [] }];
-
-  const grupe = groups.map((g) => ({
-    ...g,
-    inviteCode:
-      (codeRows ?? []).find((c) => c.id === g.id)?.invite_code ?? null,
-    members: (memberRows ?? [])
-      .filter((m) => m.group_id === g.id)
-      .map((m) => ({
-        id: m.user_id,
-        username: m.profiles?.username ?? "Netko",
-        role: m.role,
-      })),
-  }));
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("id", user.id)
+    .maybeSingle();
 
   return (
     <main className="flex flex-1 flex-col">
@@ -59,7 +25,7 @@ export default async function PostavkePage() {
         </h1>
         <p className="mt-3 text-sm text-muted">
           <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
-          Račun, obavijesti i tvoje grupe.
+          Račun i obavijesti.
         </p>
       </section>
 
@@ -78,8 +44,6 @@ export default async function PostavkePage() {
           </div>
         </div>
       </section>
-
-      <MojeGrupe groups={grupe} myId={user.id} />
 
       <section className="mt-12 border-t border-white/5 pt-8">
         <form action={logout}>

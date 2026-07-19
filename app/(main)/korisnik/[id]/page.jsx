@@ -1,13 +1,16 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getActiveGroupFor } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getUser } from "@/lib/auth";
 import { fetchAllCheckins } from "@/lib/checkins";
 import { getDayKey } from "@/lib/day";
 import { userDaySets, computeStreaks, countableDays, titleFor } from "@/lib/stats";
 import { fetchPouzdanost } from "@/lib/pouzdanost";
+import { friendIdsOf } from "@/lib/friends";
 import Avatar from "../../avatar";
 import PouzdanostCard from "../../pouzdanost-card";
 import Heatmap from "../../heatmap";
+import AddFriendButton from "./add-friend-button";
 
 const dateFmt = new Intl.DateTimeFormat("hr-HR", {
   timeZone: "Europe/Zagreb",
@@ -30,35 +33,51 @@ export default async function KorisnikPage({ params }) {
   if (user.id === id) redirect("/profil");
   const supabase = await createClient();
 
-  // Tuđi profil se gleda kroz aktivnu grupu; RLS ionako ne pušta profile
-  // ljudi s kojima ne dijeliš nijednu grupu (maybeSingle vrati null)
-  const { active } = await getActiveGroupFor(user.id);
-  if (!active) notFound();
+  const friendIds = await friendIdsOf(supabase, user.id);
+  const jeFrend = friendIds.includes(id);
 
-  // Galerija (povijesne dokazne slike) je privatna — vidi je samo vlasnik
-  // na /profil, ovdje se namjerno ne dohvaća ni prikazuje.
-  const [{ data: profile }, checkins, { data: membership }] = await Promise.all([
+  // NE-frend: minimalna javna kartica (username + avatar kroz admin
+  // klijent — namjerno javno) + gumb za zahtjev. Statistika/slike NIKAD.
+  if (!jeFrend) {
+    const admin = createAdminClient();
+    const { data: target } = await admin
+      .from("profiles")
+      .select("id, username, avatar_url")
+      .eq("id", id)
+      .maybeSingle();
+    if (!target) notFound();
+
+    return (
+      <main className="mx-auto flex min-h-[60dvh] w-full max-w-sm flex-col items-center justify-center text-center">
+        <Avatar username={target.username} avatarUrl={target.avatar_url} size={96} />
+        <h1 className="mt-4 font-display text-4xl uppercase leading-none tracking-tight">
+          {target.username}
+          <span className="text-accent">.</span>
+        </h1>
+        <p className="mt-3 text-sm text-muted">
+          Niste pajdaši, pa je ovo sve što vidiš. Takva su pravila.
+        </p>
+        <AddFriendButton targetId={target.id} />
+      </main>
+    );
+  }
+
+  // FREND: puni profil (RLS ionako pušta samo frendove)
+  const [{ data: profile }, checkins, pouzdanost] = await Promise.all([
     supabase
       .from("profiles")
       .select("username, created_at, avatar_url")
       .eq("id", id)
       .maybeSingle(),
-    fetchAllCheckins(supabase, id, active.id),
-    supabase
-      .from("group_members")
-      .select("joined_at")
-      .eq("group_id", active.id)
-      .eq("user_id", id)
-      .maybeSingle(),
+    fetchAllCheckins(supabase, id),
+    fetchPouzdanost(supabase, id),
   ]);
 
-  if (!profile || !membership) notFound();
-
-  const pouzdanost = await fetchPouzdanost(supabase, id, active.id);
+  if (!profile) notFound();
 
   const daySet = userDaySets(checkins).get(id) ?? new Set();
   const todayKey = getDayKey(new Date());
-  const regKey = getDayKey(membership.joined_at ?? profile.created_at);
+  const regKey = getDayKey(profile.created_at);
   const possible = countableDays(regKey, todayKey);
   const total = daySet.size;
   const pct = possible > 0 ? Math.round((total / possible) * 100) : 0;
@@ -88,8 +107,7 @@ export default async function KorisnikPage({ params }) {
           )}
           <p className="mt-3 text-sm text-muted">
             <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
-            U ekipi od{" "}
-            {dateFmt.format(new Date(membership.joined_at ?? profile.created_at))}
+            Na Laktu od {dateFmt.format(new Date(profile.created_at))}
           </p>
         </div>
       </section>

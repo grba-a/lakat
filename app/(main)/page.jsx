@@ -84,7 +84,7 @@ export default async function Home() {
       .select("id, user_id, checked_in_at, cancelled_at, photo_url, thumb_url")
       .gte("checked_in_at", dayStart.toISOString())
       .order("checked_in_at", { ascending: true }),
-    fetchAllCheckins(supabase, undefined, undefined, windowStart),
+    fetchAllCheckins(supabase, undefined, windowStart),
     supabase
       .from("drinks")
       .select("id, user_id, drink_type, logged_at")

@@ -74,24 +74,18 @@ export default function RundaFlow({ userId }) {
     });
   }
 
-  // Danas prisutni ČLANOVI (bez mene) — kandidati za zajednički kadar.
-  // STROGO lokacijski: broji se samo najnovija runda S koordinatama, tko
-  // je nema ne nudi se u pickeru (filter po radijusu je u handleEditorPublish
-  // kad stigne i moja lokacija). Bilo kakva greška = prazan popis
-  // (kadar je bonus, objava ne smije ovisiti o njemu)
+  // Danas prisutni FRENDOVI (bez mene) — kandidati za zajednički kadar.
+  // RLS na checkins ionako vraća samo moje + frendovske runde, pa je
+  // dovoljno povući današnje s koordinatama. STROGO lokacijski: broji se
+  // samo najnovija runda S koordinatama, tko je nema ne nudi se u pickeru
+  // (filter po radijusu je u handleEditorPublish kad stigne moja lokacija).
+  // Bilo kakva greška = prazan popis (kadar je bonus, objava ne ovisi o njemu)
   async function fetchPresentOthers() {
     try {
       const supabase = createClient();
-      const { data: me } = await supabase
-        .from("profiles")
-        .select("active_group_id")
-        .eq("id", userId)
-        .maybeSingle();
-      if (!me?.active_group_id) return [];
       const { data: rows } = await supabase
         .from("checkins")
         .select("user_id, lat, lng")
-        .eq("group_id", me.active_group_id)
         .is("cancelled_at", null)
         .gte("checked_in_at", getCurrentDayStart().toISOString())
         .order("checked_in_at", { ascending: false });

@@ -9,13 +9,13 @@ const STEPS = [
   },
   {
     n: 2,
-    title: "Uđi u BETA",
-    body: "Na Šanku stisni gumb Uđi u BETA. Javna grupa, bez šifre.",
+    title: "Dodaj pajdaše",
+    body: "Podijeli svoj kod ili upiši tuđi. Vidiš samo svoje pajdaše.",
   },
   {
     n: 3,
-    title: "Dođi za šank",
-    body: "Kad si vani, stisni TU SAM. Ekipa te vidi uživo.",
+    title: "Ponesi lakat",
+    body: "Kad si vani, slikaj dokaz i objavi. Pajdaši te vide uživo.",
   },
 ];
 
@@ -31,7 +31,7 @@ const FEATURES = [
       </>
     ),
     title: "Uživo za šankom",
-    body: "Tko je vani baš sad — bez pisanja po grupama.",
+    body: "Tko od pajdaša je vani baš sad — bez pisanja po grupama.",
   },
   {
     icon: (
@@ -42,8 +42,8 @@ const FEATURES = [
         <path d="M8 17v-3" />
       </>
     ),
-    title: "Liga ekipa",
-    body: "Tvoja ekipa protiv drugih. Tko se više druži, taj vodi.",
+    title: "Rang",
+    body: "Tko se najviše druži, taj vodi. Među pajdašima i u svijetu.",
   },
   {
     icon: (
@@ -54,7 +54,7 @@ const FEATURES = [
       </>
     ),
     title: "Mapa",
-    body: "Gdje je ekipa danas pila, na karti.",
+    body: "Gdje su pajdaši danas pili, na karti.",
   },
   {
     icon: (
@@ -66,7 +66,7 @@ const FEATURES = [
       </>
     ),
     title: "Pajdaši",
-    body: "Dodaj ekipu, vidi tko je online, zovi ih u grupu.",
+    body: "Dodaj ekipu, vidi tko je online, zovi ih na laktanje.",
   },
   {
     icon: (
@@ -77,7 +77,7 @@ const FEATURES = [
       </>
     ),
     title: "Slike dana",
-    body: "Slikaj dokaz da si stvarno vani. Ekipa reagira.",
+    body: "Slikaj dokaz da si stvarno vani. Pajdaši reagiraju.",
   },
   {
     icon: (
@@ -122,7 +122,7 @@ export default function WelcomePage() {
           Tko je večeras za šankom<BrandPunct>?</BrandPunct>
         </h1>
         <p className="mt-5 text-lg leading-relaxed text-muted">
-          Vidi ekipu uživo. A tko najmanje dolazi... e, to se zna.
+          Vidi svoje pajdaše uživo. A tko najmanje izlazi... e, to se zna.
         </p>
 
         <Link
@@ -149,10 +149,10 @@ export default function WelcomePage() {
           Što je ovo
         </h2>
         <p className="mt-4 text-xl leading-relaxed">
-          Lakat je aplikacija za tvoju ekipu. Kad si vani za šankom, stisneš{" "}
-          <span className="font-bold text-accent">TU SAM</span> i svi uživo vide
-          da si tu. Bez grupnih poruka, bez „di ste ljudi“ — samo otvoriš i vidiš
-          tko je gdje.
+          Lakat je društvena mreža za tvoju ekipu. Kad si vani za šankom,{" "}
+          <span className="font-bold text-accent">ponesi lakat</span> — slikaj
+          dokaz i objavi. Pajdaši uživo vide da si tu. Bez grupnih poruka, bez
+          „di ste ljudi“ — samo otvoriš i vidiš tko je gdje.
         </p>
         <p className="mt-4 text-lg leading-relaxed text-muted">
           A pošto se sve broji, na kraju mjeseca se točno zna tko je legenda, a
@@ -185,25 +185,25 @@ export default function WelcomePage() {
         </ol>
       </section>
 
-      {/* Za osnivače ekipa */}
+      {/* Za one koji dižu ekipu */}
       <section className="mt-20">
         <h2 className="text-xs font-bold uppercase tracking-widest text-accent">
           <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" />
-          Imaš svoju ekipu?
+          Ti si taj koji diže ekipu?
         </h2>
         <div className="glass mt-5 rounded-card px-5 py-8">
           <p className="font-display text-4xl uppercase leading-none tracking-tight">
-            Osnuj grupu<span className="text-accent">.</span>
+            Poziv na laktanje<span className="text-accent">.</span>
           </p>
           <p className="mt-4 text-lg leading-relaxed text-muted">
-            Ti si taj koji uvijek piše „di ste“? Osnuj grupu za svoju ekipu,
-            pozovi ih jednim linkom i vodite svoju ekipu do vrha lige.
+            Ti uvijek pišeš „di ste“? Digni poziv jednim tapom — mjesto,
+            vrijeme, gotovo. Svi pajdaši dobiju obavijest i jave stižu li.
           </p>
           <Link
             href="/register"
             className="pressable-soft mt-6 flex h-16 w-full items-center justify-center rounded-button border border-accent/40 bg-accent/10 font-display text-2xl uppercase tracking-wide text-accent"
           >
-            Osnuj grupu za ekipu
+            Digni ekipu
           </Link>
         </div>
       </section>
@@ -232,7 +232,7 @@ export default function WelcomePage() {
             Ekipa te čeka<span className="text-accent">.</span>
           </p>
           <p className="mt-3 text-sm text-muted">
-            Otvori račun, uđi u BETA, dođi za šank.
+            Otvori račun, dodaj pajdaše, ponesi lakat.
           </p>
           <Link
             href="/register"

@@ -5,13 +5,12 @@ import BadgesList from "./badges-list";
 // Osvojeni u boji, neosvojeni-ali-vidljivi zasivljeni, skriveni bedževi
 // potpuno izostavljeni dok se ne otključaju (iznenađenje, ne placeholder).
 // Prikaz je sklopiv (badges-list.jsx) — otključani prvi.
-export default async function BadgesGrid({ userId, groupId }) {
+export default async function BadgesGrid({ userId }) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("user_badges")
     .select("badge_key")
-    .eq("user_id", userId)
-    .eq("group_id", groupId);
+    .eq("user_id", userId);
 
   const earned = new Set((data ?? []).map((r) => r.badge_key));
   const visible = BADGE_DEFS.filter((b) => earned.has(b.key) || !b.hidden);

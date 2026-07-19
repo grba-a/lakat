@@ -5,9 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyUser } from "@/lib/push";
-import { countActiveFriends } from "@/lib/friends";
-
-const MAX_GRUPA = 3;
+import { countActiveFriends, friendIdsOf } from "@/lib/friends";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -26,6 +24,49 @@ async function friendshipBetween(admin, a, b) {
     .or(`and(requester.eq.${a},addressee.eq.${b}),and(requester.eq.${b},addressee.eq.${a})`)
     .maybeSingle();
   return data ?? null;
+}
+
+// Zajednička logika zahtjeva prema poznatoj meti (kod ili ID)
+async function createRequest(admin, userId, target) {
+  const existing = await friendshipBetween(admin, userId, target.id);
+  if (existing) {
+    if (existing.status === "accepted") {
+      return { error: "Već ste pajdaši." };
+    }
+    if (existing.requester === target.id) {
+      // Već te je on zvao — prihvati umjesto duplikata
+      const { error } = await admin
+        .from("friendships")
+        .update({ status: "accepted", responded_at: new Date().toISOString() })
+        .eq("id", existing.id);
+      if (error) return { error: `Nije prošlo: ${error.message}` };
+      revalidatePath("/profil/frendovi");
+      return { ok: true, message: "Već te je zvao. Sad ste pajdaši." };
+    }
+    return { error: "Zahtjev je već poslan, budi strpljiv." };
+  }
+
+  const { error } = await admin
+    .from("friendships")
+    .insert({ requester: userId, addressee: target.id });
+  if (error) return { error: `Nije prošlo: ${error.message}` };
+
+  try {
+    const { data: me } = await admin
+      .from("profiles")
+      .select("username")
+      .eq("id", userId)
+      .maybeSingle();
+    await notifyUser({
+      userId: target.id,
+      body: `${me?.username ?? "Netko"} te želi za pajdaša. Sumnjivo.`,
+    });
+  } catch {
+    // best-effort
+  }
+
+  revalidatePath("/profil/frendovi");
+  return { ok: true, message: "Zahtjev poslan." };
 }
 
 export async function sendFriendRequest(code) {
@@ -48,45 +89,39 @@ export async function sendFriendRequest(code) {
     return { error: "Sebe ne možeš dodati za pajdaša, koliko god htio." };
   }
 
-  const existing = await friendshipBetween(admin, user.id, target.id);
-  if (existing) {
-    if (existing.status === "accepted") {
-      return { error: "Već ste pajdaši." };
-    }
-    if (existing.requester === target.id) {
-      // Već te je on zvao — prihvati umjesto duplikata
-      const { error } = await admin
-        .from("friendships")
-        .update({ status: "accepted", responded_at: new Date().toISOString() })
-        .eq("id", existing.id);
-      if (error) return { error: `Nije prošlo: ${error.message}` };
-      revalidatePath("/profil/frendovi");
-      return { ok: true, message: "Već te je zvao. Sad ste pajdaši." };
-    }
-    return { error: "Zahtjev je već poslan, budi strpljiv." };
+  return createRequest(admin, user.id, target);
+}
+
+// Zahtjev izravno po ID-u (tuđi profil / "možda se znate") — bez koda.
+// Anti-spam: dopušteno SAMO uz bar jednog zajedničkog pajdaša; potpune
+// neznance i dalje dodaješ isključivo kodom (odluka: bez pretrage).
+export async function sendFriendRequestTo(targetId) {
+  const user = await requireUser();
+  if (!targetId || targetId === user.id) {
+    return { error: "Sebe ne možeš dodati za pajdaša, koliko god htio." };
   }
 
-  const { error } = await admin
-    .from("friendships")
-    .insert({ requester: user.id, addressee: target.id });
-  if (error) return { error: `Nije prošlo: ${error.message}` };
-
-  try {
-    const { data: me } = await admin
-      .from("profiles")
-      .select("username")
-      .eq("id", user.id)
-      .maybeSingle();
-    await notifyUser({
-      userId: target.id,
-      body: `${me?.username ?? "Netko"} te želi za pajdaša. Sumnjivo.`,
-    });
-  } catch {
-    // best-effort
+  const admin = createAdminClient();
+  const { data: target } = await admin
+    .from("profiles")
+    .select("id, username")
+    .eq("id", targetId)
+    .maybeSingle();
+  if (!target) {
+    return { error: "Taj korisnik ne postoji." };
   }
 
-  revalidatePath("/profil/frendovi");
-  return { ok: true, message: "Zahtjev poslan." };
+  const [mine, theirs] = await Promise.all([
+    friendIdsOf(admin, user.id),
+    friendIdsOf(admin, targetId),
+  ]);
+  const mineSet = new Set(mine);
+  const mutual = theirs.some((id) => mineSet.has(id));
+  if (!mutual) {
+    return { error: "Nemate zajedničkih pajdaša. Traži mu kod uživo, upoznajte se." };
+  }
+
+  return createRequest(admin, user.id, target);
 }
 
 export async function respondFriendRequest(id, accept) {
@@ -135,110 +170,6 @@ export async function removeFriend(id) {
   if (error) return { error: `Nije prošlo: ${error.message}` };
   revalidatePath("/profil/frendovi");
   return { ok: true, message: "Maknut. Sam si kriv." };
-}
-
-export async function inviteToGroup(groupId, friendId) {
-  const user = await requireUser();
-  const admin = createAdminClient();
-
-  const { data: membership } = await admin
-    .from("group_members")
-    .select("role")
-    .eq("group_id", groupId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (!membership) return { error: "Nisi član te grupe." };
-
-  const friendship = await friendshipBetween(admin, user.id, friendId);
-  if (friendship?.status !== "accepted") {
-    return { error: "Taj ti nije pajdaš (još)." };
-  }
-
-  const { data: alreadyMember } = await admin
-    .from("group_members")
-    .select("user_id")
-    .eq("group_id", groupId)
-    .eq("user_id", friendId)
-    .maybeSingle();
-  if (alreadyMember) return { error: "Već je u grupi." };
-
-  const { data: pending } = await admin
-    .from("group_invites")
-    .select("id")
-    .eq("group_id", groupId)
-    .eq("invitee", friendId)
-    .eq("status", "pending")
-    .maybeSingle();
-  if (pending) return { error: "Već je pozvan, čeka odgovor." };
-
-  const { error } = await admin
-    .from("group_invites")
-    .insert({ group_id: groupId, inviter: user.id, invitee: friendId });
-  if (error) return { error: `Nije prošlo: ${error.message}` };
-
-  try {
-    const [{ data: group }, { data: me }] = await Promise.all([
-      admin.from("groups").select("name").eq("id", groupId).maybeSingle(),
-      admin.from("profiles").select("username").eq("id", user.id).maybeSingle(),
-    ]);
-    await notifyUser({
-      userId: friendId,
-      body: `${me?.username ?? "Netko"} te zove u grupu "${group?.name ?? "?"}".`,
-    });
-  } catch {
-    // best-effort
-  }
-
-  revalidatePath("/profil/frendovi");
-  return { ok: true, message: "Pozvan je." };
-}
-
-export async function respondGroupInvite(id, accept) {
-  const user = await requireUser();
-  const admin = createAdminClient();
-
-  const { data: invite } = await admin
-    .from("group_invites")
-    .select("id, group_id, invitee, status")
-    .eq("id", id)
-    .maybeSingle();
-  if (!invite || invite.invitee !== user.id || invite.status !== "pending") {
-    return { error: "Taj poziv ne postoji ili više nije aktualan." };
-  }
-
-  if (!accept) {
-    const { error } = await admin
-      .from("group_invites")
-      .update({ status: "declined" })
-      .eq("id", id);
-    if (error) return { error: `Nije prošlo: ${error.message}` };
-    revalidatePath("/profil/frendovi");
-    return { ok: true };
-  }
-
-  const { count } = await admin
-    .from("group_members")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id);
-  if ((count ?? 0) >= MAX_GRUPA) {
-    return { error: "Tri grupe su ti malo? Alkoholičaru." };
-  }
-
-  const { error: memberError } = await admin.from("group_members").upsert(
-    { group_id: invite.group_id, user_id: user.id, role: "member" },
-    { onConflict: "group_id,user_id", ignoreDuplicates: true }
-  );
-  if (memberError) return { error: `Nije prošlo: ${memberError.message}` };
-
-  await admin.from("group_invites").update({ status: "accepted" }).eq("id", id);
-  await admin
-    .from("profiles")
-    .update({ active_group_id: invite.group_id })
-    .eq("id", user.id);
-
-  revalidatePath("/", "layout");
-  revalidatePath("/profil/frendovi");
-  return { ok: true, message: "Upao si. Nema šifre, ima pajdaša." };
 }
 
 // Heartbeat: samo dok je app u foregroundu (client to sam pazi), obična
