@@ -162,7 +162,10 @@ redom (0→G), jedna po sesiji; SVE se razvija na DEV Supabase bazi (.env.local)
 dira TEK u Fazi G (cutover uz lockdown). Dijelovi ovog CLAUDE.md koji opisuju grupe/ligu/
 mjesta vrijede za ŽIVU 2.x produkciju dok cutover ne prođe — potpuni rewrite je dio Faze F.
 
-- [ ] Faza 0: dev okruženje (novi Supabase projekt, seed, .env switch)
+- [x] Faza 0: dev okruženje — Supabase projekt `lakat-dev` (ref krhirdrftysfbltugmwr, org Lakat),
+      SVA schema (21 skripta, bez prod-migracijskog bloka iz grupe1) primijenjena; `.env.local` na
+      dev (prod backup u `.env.prod.backup`); 3 test računa + frendstvo (podaci u .env.local
+      komentarima — NE u repo, repo je javan)
 - [ ] Faza A: baza 3.0 (are_friends RLS, kafici, migracijska skripta)
 - [ ] Faza B: friend model core (akcije + pushevi)
 - [ ] Faza C: novi Šank — kronološki feed
