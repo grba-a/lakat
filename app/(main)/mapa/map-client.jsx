@@ -34,12 +34,10 @@ const timeFmt = new Intl.DateTimeFormat("hr-HR", {
 });
 
 export default function MapClient({
-  groupId,
   profiles,
   initialCheckins,
   initialDrinks = [],
-  mjesta = [],
-  myGroupName = null,
+  kafici = [],
 }) {
   const [rows, setRows] = useState(() => {
     const map = {};
@@ -57,12 +55,11 @@ export default function MapClient({
 
   useEffect(() => {
     const supabase = createClient();
-    const groupFilter = `group_id=eq.${groupId}`;
     const channel = supabase
-      .channel(`checkins-mapa-${groupId}`)
+      .channel("checkins-mapa")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "checkins", filter: groupFilter },
+        { event: "INSERT", schema: "public", table: "checkins" },
         (payload) => {
           if (payload.new.checked_in_at < getCurrentDayStart().toISOString()) return;
           setRows((prev) => ({ ...prev, [payload.new.id]: payload.new }));
@@ -70,7 +67,7 @@ export default function MapClient({
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "checkins", filter: groupFilter },
+        { event: "UPDATE", schema: "public", table: "checkins" },
         (payload) => {
           setRows((prev) =>
             prev[payload.new.id] ? { ...prev, [payload.new.id]: payload.new } : prev
@@ -79,7 +76,7 @@ export default function MapClient({
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "drinks", filter: groupFilter },
+        { event: "*", schema: "public", table: "drinks" },
         (payload) => {
           if (payload.eventType === "DELETE") {
             setDrinks((prev) => {
@@ -96,7 +93,7 @@ export default function MapClient({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [groupId]);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(
@@ -140,17 +137,13 @@ export default function MapClient({
     }));
   }, [profiles, rows, drinks, dayStartIso]);
 
-  const nasaMjesta = mjesta.filter((m) => m.holder === myGroupName).length;
-
   return (
     <>
-      <MapView markers={markers} mjesta={mjesta} myGroupName={myGroupName} />
-      {mjesta.length > 0 && (
+      <MapView markers={markers} kafici={kafici} />
+      {kafici.length > 0 && (
         <p className="mt-3 text-xs text-muted">
-          ⚑ Ekipa s najviše rundi na lokaciji (30 dana) drži to mjesto.
-          {nasaMjesta > 0
-            ? ` Vi držite ${nasaMjesta}.`
-            : " Vi još ne držite ništa. Sramota."}
+          ⚑ Zeleno = partner kafić. Laktanje tamo se pamti — bodovi i
+          pogodnosti stižu.
         </p>
       )}
       {markers.length === 0 ? (

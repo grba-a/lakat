@@ -8,11 +8,11 @@ import "leaflet/dist/leaflet.css";
 // lokacije gledatelja
 const HOME = [42.6215, 18.1996];
 
-export default function MapView({ markers, mjesta = [], myGroupName = null }) {
+export default function MapView({ markers, kafici = [] }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const layerRef = useRef(null);
-  const mjestaLayerRef = useRef(null);
+  const kaficiLayerRef = useRef(null);
   const markersCountRef = useRef(markers.length);
   markersCountRef.current = markers.length;
 
@@ -26,7 +26,7 @@ export default function MapView({ markers, mjesta = [], myGroupName = null }) {
       maxZoom: 19,
     }).addTo(map);
     map.setView(HOME, 15);
-    mjestaLayerRef.current = L.layerGroup().addTo(map);
+    kaficiLayerRef.current = L.layerGroup().addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
 
@@ -53,38 +53,28 @@ export default function MapView({ markers, mjesta = [], myGroupName = null }) {
     };
   }, []);
 
-  // Naša mjesta: zastavica na lokacijama koje neka ekipa drži — ispod
-  // dnevnih markera, bez osobnih podataka (samo ime grupe + broj rundi)
+  // Partner kafići: zelena zastavica — ispod dnevnih markera. Laktanje
+  // na tim lokacijama se pamti (kafic_id na checkinu, bodovi u budućnosti).
   useEffect(() => {
-    const layer = mjestaLayerRef.current;
+    const layer = kaficiLayerRef.current;
     if (!layer) return;
     layer.clearLayers();
-    for (const m of mjesta) {
-      const mine = myGroupName && m.holder === myGroupName;
-      const label = m.holder ?? "⚔️ ničije";
+    for (const k of kafici) {
       const icon = L.divIcon({
-        html: `<div style="display:flex;align-items:center;gap:4px;background:${
-          mine ? "rgba(74,222,128,0.18)" : "rgba(19,19,22,0.85)"
-        };border:1px solid ${
-          mine ? "rgba(74,222,128,0.6)" : "rgba(255,255,255,0.2)"
-        };border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;color:${
-          mine ? "#4ade80" : "#f4f4f5"
-        };white-space:nowrap;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))">⚑ ${label}</div>`,
+        html: `<div style="display:flex;align-items:center;gap:4px;background:rgba(74,222,128,0.18);border:1px solid rgba(74,222,128,0.6);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;color:#4ade80;white-space:nowrap;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6))">⚑ ${k.name}</div>`,
         className: "",
         iconSize: null,
         iconAnchor: [10, 10],
       });
-      const marker = L.marker([m.lat, m.lng], {
+      const marker = L.marker([k.lat, k.lng], {
         icon,
         zIndexOffset: -100,
       }).addTo(layer);
       marker.bindPopup(
-        m.holder
-          ? `<strong>${m.holder}</strong> drži ovo mjesto<br/>${m.count} rundi u zadnjih 30 dana`
-          : `Ničija zemlja — izjednačeno.<br/>Otmi mjesto s više rundi.`
+        `<strong>${k.name}</strong> — partner kafić.<br/>Laktanje ovdje se pamti.`
       );
     }
-  }, [mjesta, myGroupName]);
+  }, [kafici]);
 
   useEffect(() => {
     const map = mapRef.current;
