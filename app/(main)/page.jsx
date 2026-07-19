@@ -82,7 +82,7 @@ export default async function Home() {
   ] = await Promise.all([
     supabase
       .from("checkins")
-      .select("id, user_id, checked_in_at, cancelled_at, photo_url, thumb_url")
+      .select("id, user_id, checked_in_at, cancelled_at, photo_url, thumb_url, lat, lng")
       .gte("checked_in_at", dayStart.toISOString())
       .order("checked_in_at", { ascending: true }),
     fetchAllCheckins(supabase, undefined, windowStart),

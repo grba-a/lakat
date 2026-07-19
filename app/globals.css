@@ -88,6 +88,29 @@
   animation-delay: calc(var(--stagger-i, 0) * 40ms);
 }
 
+/* Novi feed item stigao uživo (realtime) — suptilnije uklizavanje odozgo +
+   kratak zeleni highlight, JEDNOKRATNO (klasa se makne u JS-u nakon
+   animacije da se ne ponavlja na re-renderu/reorderu liste). */
+@keyframes feed-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.98);
+  }
+}
+@keyframes feed-glow-in {
+  from {
+    box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.55), 0 0 18px rgba(74, 222, 128, 0.22);
+  }
+  to {
+    box-shadow: 0 0 0 1px rgba(74, 222, 128, 0), 0 0 18px rgba(74, 222, 128, 0);
+  }
+}
+.stagger > .feed-item-new {
+  animation:
+    feed-slide-in 380ms var(--ease-spring) both,
+    feed-glow-in 900ms var(--ease-fluid) both;
+}
+
 /* Bedž toast — kratki "moment" kad se nešto trajno otključa */
 @keyframes badge-pop {
   from {
@@ -178,26 +201,15 @@ input,
   }
 }
 
-/* Custom scrollbar — tanka, brand zelena. Radi na Androidu/desktopu
-   (WebKit/Chromium + Firefox); iOS Safari ignorira stiliziranje scrollbara. */
+/* Bez scrollbara nigdje — čišći izgled. Radi na Androidu/desktopu
+   (WebKit/Chromium + Firefox); iOS Safari ponegdje ignorira ovo, zato
+   pojedini horizontalni redovi (npr. story bar) dodatno imaju clipping
+   wrapper koji nativni scrollbar fizički odreže. */
 * {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(74, 222, 128, 0.5) transparent;
+  scrollbar-width: none;
 }
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(74, 222, 128, 0.45);
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:active,
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(74, 222, 128, 0.7);
+*::-webkit-scrollbar {
+  display: none;
 }
 
 /* Bez scrollbara — za swipe carousel track u lightboxu (globalni zeleni

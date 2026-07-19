@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { getCurrentDayStart } from "@/lib/day";
 import { najaviDolazak, react } from "@/app/actions";
+import BrandPunct from "@/app/brand-punct";
 import Avatar from "./avatar";
 import PhotoLightbox from "./photo-lightbox";
 import ReactionBar, { toggleReaction } from "./reaction-bar";
@@ -83,6 +84,20 @@ export default function Sank({
   const [avatarSheet, setAvatarSheet] = useState(null); // { profile, present }
   const [isPending, startTransition] = useTransition();
 
+  // Prati koji su checkin id-jevi već viđeni (initial load) da se realtime
+  // dolasci mogu jednokratno animirati (uklizavanje), bez ponavljanja na
+  // re-renderu/reorderu liste.
+  const seenIdsRef = useRef(new Set(initialCheckins.map((c) => c.id)));
+  const arrivalTimersRef = useRef(new Set());
+  const [justArrivedIds, setJustArrivedIds] = useState(() => new Set());
+
+  useEffect(
+    () => () => {
+      for (const t of arrivalTimersRef.current) clearTimeout(t);
+    },
+    []
+  );
+
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -92,7 +107,23 @@ export default function Sank({
         { event: "INSERT", schema: "public", table: "checkins" },
         (payload) => {
           if (payload.new.checked_in_at < getCurrentDayStart().toISOString()) return;
-          setRows((prev) => ({ ...prev, [payload.new.id]: payload.new }));
+          const id = payload.new.id;
+          const isNew = !seenIdsRef.current.has(id);
+          seenIdsRef.current.add(id);
+          setRows((prev) => ({ ...prev, [id]: payload.new }));
+          if (isNew) {
+            setJustArrivedIds((prev) => new Set(prev).add(id));
+            const timer = setTimeout(() => {
+              arrivalTimersRef.current.delete(timer);
+              setJustArrivedIds((prev) => {
+                if (!prev.has(id)) return prev;
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+              });
+            }, 1000);
+            arrivalTimersRef.current.add(timer);
+          }
         }
       )
       .on(
@@ -290,6 +321,34 @@ export default function Sank({
     return map;
   }, [odazivi]);
 
+  // Detalji za avatar sheet (objave/pića/lokacija tog korisnika danas) —
+  // sve izvedeno iz već učitanog client-side state-a, bez novih upita.
+  const sheetProfileId = avatarSheet?.profile?.id ?? null;
+
+  const sheetPosts = useMemo(() => {
+    if (!sheetProfileId) return [];
+    return Object.values(rows)
+      .filter(
+        (r) =>
+          r.user_id === sheetProfileId && !r.cancelled_at && r.checked_in_at >= dayStartIso
+      )
+      .sort((a, b) => a.checked_in_at.localeCompare(b.checked_in_at));
+  }, [rows, sheetProfileId, dayStartIso]);
+
+  const sheetDrinks = useMemo(() => {
+    if (!sheetProfileId) return [];
+    return Object.values(drinks)
+      .filter((d) => d.user_id === sheetProfileId && d.logged_at >= dayStartIso)
+      .sort((a, b) => a.logged_at.localeCompare(b.logged_at));
+  }, [drinks, sheetProfileId, dayStartIso]);
+
+  const sheetLocation = useMemo(() => {
+    const withCoords = [...sheetPosts]
+      .reverse()
+      .find((post) => post.lat != null && post.lng != null);
+    return withCoords ? { lat: withCoords.lat, lng: withCoords.lng } : null;
+  }, [sheetPosts]);
+
   const iAmPresent = present.some((p) => p.id === currentUserId);
   const iAmArriving = arriving.some((p) => p.id === currentUserId);
   const canNajava = !iAmPresent && !iAmArriving;
@@ -342,17 +401,19 @@ export default function Sank({
     );
   }
 
-  function openPhoto(item) {
-    const username = profileById.get(item.user_id)?.username ?? "Netko";
+  function openPhoto(item, list = [item]) {
+    const withPhotos = list.filter((it) => it.photo_url);
+    const startIndex = Math.max(
+      0,
+      withPhotos.findIndex((it) => it.id === item.id)
+    );
     setLightbox({
-      items: [
-        {
-          url: item.photo_url,
-          caption: `${username} · ${timeFmt.format(new Date(item.checked_in_at))}`,
-          checkinId: item.id,
-        },
-      ],
-      startIndex: 0,
+      items: withPhotos.map((it) => ({
+        url: it.photo_url,
+        caption: `${profileById.get(it.user_id)?.username ?? "Netko"} · ${timeFmt.format(new Date(it.checked_in_at))}`,
+        checkinId: it.id,
+      })),
+      startIndex,
     });
   }
 
@@ -428,56 +489,58 @@ export default function Sank({
             Nitko od pajdaša nije vani. Šank zjapi prazan, sram vas sve bilo.
           </p>
         ) : (
-          <div className="scrollbar-none stagger -mx-5 mt-4 flex gap-4 overflow-x-auto px-5">
-            {present.map((p, i) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setAvatarSheet({ profile: p, present: true })}
-                className="pressable flex w-16 shrink-0 flex-col items-center gap-1.5"
-                style={{ "--stagger-i": Math.min(i, 8) }}
-              >
-                <span className="relative">
-                  <span className="block rounded-full border-2 border-accent p-0.5">
-                    <Avatar username={p.username} avatarUrl={p.avatar_url} size={52} />
-                  </span>
-                  {(drinkCountByUser.get(p.id) ?? 0) > 0 && (
-                    <span className="absolute -bottom-1 -right-1 rounded-full border border-white/10 bg-black/85 px-1.5 text-[10px] font-bold leading-4 text-foreground">
-                      🍺{drinkCountByUser.get(p.id)}
+          <div className="-mx-5 mt-4 overflow-hidden">
+            <div className="scrollbar-none stagger -mb-6 flex gap-4 overflow-x-auto px-5 pb-6">
+              {present.map((p, i) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setAvatarSheet({ profile: p, present: true })}
+                  className="pressable flex w-16 shrink-0 flex-col items-center gap-1.5"
+                  style={{ "--stagger-i": Math.min(i, 8) }}
+                >
+                  <span className="relative">
+                    <span className="block rounded-full border-2 border-accent p-0.5">
+                      <Avatar username={p.username} avatarUrl={p.avatar_url} size={52} />
                     </span>
-                  )}
-                  {incomingByTarget.has(p.id) && (
-                    <span className="absolute -top-1 -right-1 rounded-full border border-white/10 bg-black/85 px-1.5 text-[10px] font-bold leading-4 text-amber-300">
-                      👀{incomingByTarget.get(p.id)}
-                    </span>
-                  )}
-                </span>
-                <span className="w-full truncate text-center text-[10px] font-bold text-foreground">
-                  {p.username}
-                </span>
-              </button>
-            ))}
-            {arriving.map((p, i) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setAvatarSheet({ profile: p, present: false })}
-                className="pressable flex w-16 shrink-0 flex-col items-center gap-1.5"
-                style={{ "--stagger-i": Math.min(present.length + i, 8) }}
-              >
-                <span className="relative">
-                  <span className="block rounded-full border-2 border-amber-400/70 p-0.5 opacity-80">
-                    <Avatar username={p.username} avatarUrl={p.avatar_url} size={52} />
+                    {(drinkCountByUser.get(p.id) ?? 0) > 0 && (
+                      <span className="absolute -bottom-1 -right-1 rounded-full border border-white/10 bg-black/85 px-1.5 text-[10px] font-bold leading-4 text-foreground">
+                        🍺{drinkCountByUser.get(p.id)}
+                      </span>
+                    )}
+                    {incomingByTarget.has(p.id) && (
+                      <span className="absolute -top-1 -right-1 rounded-full border border-white/10 bg-black/85 px-1.5 text-[10px] font-bold leading-4 text-amber-300">
+                        👀{incomingByTarget.get(p.id)}
+                      </span>
+                    )}
                   </span>
-                  <span className="absolute -top-1 -right-1 text-xs">👀</span>
-                </span>
-                <span className="w-full truncate text-center text-[10px] font-bold text-amber-300">
-                  {p.targetId && profileById.has(p.targetId)
-                    ? `→ ${profileById.get(p.targetId).username}`
-                    : "stiže"}
-                </span>
-              </button>
-            ))}
+                  <span className="w-full truncate text-center text-[10px] font-bold text-foreground">
+                    {p.username}
+                  </span>
+                </button>
+              ))}
+              {arriving.map((p, i) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setAvatarSheet({ profile: p, present: false })}
+                  className="pressable flex w-16 shrink-0 flex-col items-center gap-1.5"
+                  style={{ "--stagger-i": Math.min(present.length + i, 8) }}
+                >
+                  <span className="relative">
+                    <span className="block rounded-full border-2 border-amber-400/70 p-0.5 opacity-80">
+                      <Avatar username={p.username} avatarUrl={p.avatar_url} size={52} />
+                    </span>
+                    <span className="absolute -top-1 -right-1 text-xs">👀</span>
+                  </span>
+                  <span className="w-full truncate text-center text-[10px] font-bold text-amber-300">
+                    {p.targetId && profileById.has(p.targetId)
+                      ? `→ ${profileById.get(p.targetId).username}`
+                      : "stiže"}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </section>
@@ -488,7 +551,30 @@ export default function Sank({
           Danas
         </h2>
 
-        {feedItems.length === 0 ? (
+        {!iAmPresent && feedItems.length > 0 ? (
+          <div className="relative mt-4 overflow-hidden rounded-card">
+            <div className="pointer-events-none select-none blur-lg brightness-[.35]" aria-hidden="true">
+              <div className="flex flex-col gap-4">
+                {feedItems.slice(0, 2).map((item) => (
+                  <div key={item.id} className="surface-2 h-56 overflow-hidden rounded-card">
+                    {item.photo_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.photo_url} alt="" className="h-full w-full object-cover" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-6 text-center">
+              <p className="font-display text-2xl uppercase leading-none">
+                <BrandPunct>Objavi rundu da vidiš tulum.</BrandPunct>
+              </p>
+              <p className="text-xs text-muted">
+                Frendovi su za šankom, a ti buljiš u prazno. Digni zeleni plus.
+              </p>
+            </div>
+          </div>
+        ) : feedItems.length === 0 ? (
           <p className="mt-4 text-sm text-muted">
             Još nijedna runda danas. Budi prvi, ponesi lakat.
           </p>
@@ -501,7 +587,7 @@ export default function Sank({
               return (
                 <article
                   key={item.id}
-                  className="surface-2 overflow-hidden rounded-card"
+                  className={`surface-2 overflow-hidden rounded-card${justArrivedIds.has(item.id) ? " feed-item-new" : ""}`}
                   style={{ "--stagger-i": Math.min(i, 8) }}
                 >
                   <Link
@@ -599,9 +685,10 @@ export default function Sank({
             onClick={() => setAvatarSheet(null)}
           >
             <div
-              className="w-full max-w-sm rounded-t-3xl border-t border-white/10 bg-[#131316] p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)]"
+              className="w-full max-w-sm rounded-t-3xl border-t border-white/10 bg-[#131316] px-5 pb-[max(env(safe-area-inset-bottom),1.25rem)] pt-3"
               onClick={(e) => e.stopPropagation()}
             >
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" aria-hidden="true" />
               <div className="flex items-center gap-3">
                 <Avatar
                   username={avatarSheet.profile.username}
@@ -612,6 +699,59 @@ export default function Sank({
                   {avatarSheet.profile.username}
                 </span>
               </div>
+
+              <div className="mt-4 max-h-[55dvh] overflow-y-auto">
+                {sheetPosts.length > 0 ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {sheetPosts
+                        .filter((post) => post.photo_url)
+                        .map((post) => (
+                          <button
+                            key={post.id}
+                            type="button"
+                            onClick={() => {
+                              setAvatarSheet(null);
+                              openPhoto(post, sheetPosts);
+                            }}
+                            className="pressable-soft aspect-square overflow-hidden rounded-field bg-white/[0.04]"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={post.thumb_url || post.photo_url}
+                              alt={`Slika u ${timeFmt.format(new Date(post.checked_in_at))}`}
+                              loading="lazy"
+                              decoding="async"
+                              className="h-full w-full object-cover"
+                            />
+                          </button>
+                        ))}
+                    </div>
+                    {sheetDrinks.length > 0 && (
+                      <p className="mt-3 text-xs text-muted">
+                        🍺 {sheetDrinks.length} {sheetDrinks.length === 1 ? "piće" : "pića"} danas
+                        · zadnje u{" "}
+                        {timeFmt.format(
+                          new Date(sheetDrinks[sheetDrinks.length - 1].logged_at)
+                        )}
+                      </p>
+                    )}
+                    {sheetLocation && (
+                      <a
+                        href={`https://www.google.com/maps?q=${sheetLocation.lat},${sheetLocation.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-block text-xs font-bold text-accent"
+                      >
+                        📍 Otvori lokaciju
+                      </a>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-muted">Još ništa danas.</p>
+                )}
+              </div>
+
               <div className="mt-4 flex flex-col gap-2">
                 <Link
                   href={profileHref(avatarSheet.profile.id)}
