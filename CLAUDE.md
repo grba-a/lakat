@@ -3,19 +3,26 @@
 # LAKAT — Kontekst projekta
 
 ## Što je ovo
-Web aplikacija (PWA) za privatne ekipe koje se druže uživo (izvorno kafić Club23 u Srebrenom;
-cilja regionalno/balkansko tržište — "LAKAT 2.0" pivot iz jednog šanka u aplikaciju za druženje).
-Članovi dižu ekipu (saziv), objavljuju runde s dokaznom slikom i skupljaju bodove za svoju grupu u
-tjednoj LIGI protiv drugih grupa. **Sram mehanika ("pička mjeseca", /shame) je UKLONJENA** —
-motivacija je natjecanje među ekipama, ne prozivanje pojedinca unutar ekipe.
-Ton aplikacije je vulgaran i zajebantski — to je feature, ne bug; vulgarne riječi u copyju su OK i
-dalje, samo mehanika srama ne postoji. Copy piši na hrvatskom, slobodno bezobrazno, ali razumljivo
-cijeloj regiji (izbjegavaj hiper-lokalni sleng koji izvan Dubrovnika nitko ne kuži).
-Jezične konvencije copyja: "pjanac/pjanci" (dubrovački, NE "pijanac"), bez engleskog "checkirati" (domaće: "za šankom", "sjeo za šank"), linkovi za prijavu su "Prijavi se", loading tekst "Sekunda...".
+Web aplikacija (PWA) — **društvena mreža za druženje uživo** (cilja regionalno/balkansko tržište).
+Korisnik gradi **friend listu**, objavljuje runde s dokaznom slikom, diže "Poziv na laktanje", i
+natječe se u tjednom RANGU (među pajdašima + globalno). Dugoročno: partner kafići (loyalty bodovi za
+popuste, INA/BATAK model). **Sram mehanika je UKLONJENA.**
+Ton aplikacije je vulgaran i zajebantski — to je feature, ne bug; vulgarne riječi u copyju su OK.
+Copy piši na hrvatskom, slobodno bezobrazno, ali razumljivo cijeloj regiji (izbjegavaj hiper-lokalni
+sleng koji izvan Dubrovnika nitko ne kuži). Jezične konvencije copyja: "pjanac/pjanci" (dubrovački,
+NE "pijanac"), "pajdaš/pajdaši" za frendove, bez engleskog "checkirati" (domaće: "za šankom", "sjeo za
+šank"), linkovi za prijavu su "Prijavi se", loading tekst "Sekunda...".
+**Brend interpunkcija** (`. ? !` u display fontu = cijeli accent zeleni) ide kroz `app/brand-punct.jsx`.
 
-Aplikacija je **multi-tenant**: korisnik može biti član do 3 grupe, svaka grupa ima svoje ime i lozinku
-(hashirano u bazi, provjera isključivo server-side), sve što se vidi (checkini, statistika, mapa) je
-scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
+### PRIVATNOST = SAMO FRENDOVI (temeljno pravilo 3.0)
+Sav sadržaj (checkini, slike, pića, prisutnost, statistika, pozivi) vidi ISKLJUČIVO prihvaćeni frend.
+Tuđi profil bez frendstva = samo username + avatar + "Dodaj". Provedeno na RLS razini
+(`are_friends()` helper) — kod se OSLANJA na RLS (upiti nemaju group/friend filter, realtime kanali
+su bez filtera), pa svaki novi upit MORA proći kroz user-scoped klijent osim gdje je namjerno javno
+(username/avatar preko admin klijenta na ne-frend kartici, "možda se znate", rang globalni broj).
+
+**Grupe su UKLONJENE** (bile 2.x). Tablice `groups`/`group_members`/`group_id` kolone OSTAJU u bazi
+(povijest, nullable), ali ih novi kod NE čita. Vidljivost određuje `friendships` graf.
 
 ## Stack (NE MIJENJAJ)
 - Next.js 16+, App Router, JavaScript (.jsx), NE TypeScript
@@ -25,7 +32,31 @@ scopano na trenutno aktivnu grupu (`profiles.active_group_id`).
 - PWA: manifest + service worker, instalacija na home screen. SW (`public/sw.js`, cache "lakat-v4"): RSC/prefetch zahtjeve (`_rsc`, `RSC` header) NE presreće (sintetski odgovori tjeraju Next router na puni reload!), `/_next/static/`+ikone+fontovi su cache-first, navigacije network-first s offline fallbackom, ostalo se ne dira
 - Middleware fajl se zove `proxy.js` (Next 16 preimenovanje middleware→proxy); u njemu se auth provjerava s `getClaims()` (lokalna JWT validacija), NE `getUser()` (mrežni roundtrip po requestu)
 
-## Pravila igre (poslovna logika)
+## 3.0 PROMJENE — override za pravila ispod
+Detaljna "Pravila igre" i "Baza"/"Ekrani" sekcije NIŽE su pisane za 2.x (grupe). U 3.0 vrijedi isti
+flow ALI scope je friend lista umjesto grupe. Ključni deltas (mjerodavni gdje se kose s tekstom niže):
+- **Vidljivost**: `is_member(group_id)` → `are_friends(user, autor)`. Helperi u `supabase-lakat3-1.sql`
+  (`are_friends`, `can_see_checkin`, `can_see_saziv`). Feed/mapa/rang su scopani na ja+frendove.
+- **Šank = kronološki feed** (`sank.jsx`): story bar prisutnih/stižućih avatara (tap → sheet
+  Profil/Stižem) + feed današnjih rundi (velika slika, inline reakcije, 💬 → `comment-sheet.jsx`
+  bottom sheet). Feed je SAMO današnji lakat-dan. Realtime kanal `feed-live-${userId}` bez filtera.
+- **Saziv**: max 1 živi po KREATORU (ne po grupi), ide SVIM frendovima kreatora; stack živih poziva na
+  vrhu Šanka (`saziv-card.jsx`: `SazivComposer` + `SazivCard`).
+- **Rang** (`lib/rang.js`, `/rang`, bivša /liga koja sad redirecta): bodovi POJEDINCA (dolazak +2,
+  odaziv +1, kadar +4/dan, osobni izazov +10). Prikaz: ljestvica frend kruga + MOJA globalna pozicija
+  SAMO kao broj ("#3 od N"). Izazov tjedna je OSOBAN (`lib/izazovi.js`, hash user+week).
+- **Pushevi**: `notifyFriends(userId,...)` (frendovi autora) umjesto notifyGroup. FOMO = "3+ pajdaša
+  vani" po primatelju (`fomoSweep`, claim `profiles.fomo_day`). Prazan-šank cron OBRISAN. Streak-visi
+  samo osobni.
+- **Kadar** = prisutni FRENDOVI unutar 500 m (`lib/geo.js`). **Bedževi** globalni po korisniku
+  (`unique(user_id, badge_key)`, bez groupId; `founding_member`/`prvi_ikad` umirovljeni).
+- **Mapa**: mjesta/otimanje OBRISANI; partner kafići (`kafici` tablica) = zelene zastavice. Runda u
+  radijusu kafića dobiva `checkins.kafic_id` (temelj loyalty bodova — UI SKRIVEN do 1. ugovora).
+- **Discovery**: kod + share link + "možda se znate" (frendovi frendova, `/profil/frendovi`). Zahtjev
+  s tuđeg profila (`sendFriendRequestTo`) traži bar 1 zajedničkog pajdaša. BEZ pretrage po imenu.
+- **Onboarding**: registracija bez grupe → ako nemaš frendova, Šank pokazuje `add-friends-card.jsx`.
+
+## Pravila igre (poslovna logika) — 2.x baza, čitaj uz 3.0 override gore
 1. **Runda (check-in)**: zeleni PLUS u sredini navbara (TikTok stil, `plus-button.jsx` + `runda-flow.jsx`, lazy iz `nav.jsx`) → kamera → **photo editor** (`photo-editor.jsx`: pregled + opcionalni IG-story tekst, 4 stila, drag pozicija; tekst se peče canvasom u JPEG prije uploada, thumb iz pečenog bloba) → "Objavi" upisuje red u `checkins` → **omnitrix kolo pića** (`omnitrix.jsx`: okreće se prstom 1:1, inercija + snap na segment, odabrano je pod kazaljkom, "Potvrdi" = logDrink; X preskače; NE random, potpuno neprozirni overlay). **Više rundi dnevno je dozvoljeno** — prva slika dana je check-in (checkin push kopija, `isFirstToday` u checkIn akciji), svaka sljedeća je nova runda (nova slika u Slike dana + piće) i TAKOĐER šalje push (`rundaPushBody`) uz cooldown po autoru: `RUNDA_PUSH_COOLDOWN_MS` = 45 min od prethodne autorove runde, inače se push preskače (objava prolazi). Popis "Za šankom" prikazuje ZADNJU objavljenu sliku korisnika i njeno vrijeme (fallback: najnoviji checkin bez slike). Piće se logira ISKLJUČIVO kroz taj flow; undo = toast "↩ Krivi tap" (~8s) nakon zapisanog pića. Veliki gumb "TU SAM" i drink-bar više NE postoje. **"Ipak bježim" je maknut** — `cancelCheckIn` akcija ne postoji, `checkins.cancelled_at` kolona ostaje u bazi zbog starih redova (filteri `.is("cancelled_at", null)` ostaju).
 1b. **Saziv — u UI-ju se zove "POZIV NA LAKTANJE"** (gumb za slanje: "ZOVI NAROD"; interni
    nazivi u kodu ostaju sazivi/digniEkipu). (`saziv-card.jsx` na vrhu Šanka): bilo koji član digne okupljanje —
@@ -171,7 +202,7 @@ mjesta vrijede za ŽIVU 2.x produkciju dok cutover ne prođe — potpuni rewrite
 - [x] Faza C: novi Šank — kronološki feed (sank.jsx: story bar prisutnih/stižućih avatara s mini action sheetom Profil/Stižem, feed današnjih rundi s inline reakcijama + komentari u bottom sheetu comment-sheet.jsx, stack živih poziva saziv-card.jsx SazivComposer+SazivCard, realtime bez filtera — RLS ograničava); page.jsx bez grupa (frend krug + comment counts); add-friends-card.jsx empty state s kodom; flashbacks bez group filtera; whats-new maknut sa Šanka
 - [x] Faza D: Rang — lib/rang.js (computeBodovi/computeRang: bodovi pojedinca, ljestvica frend kruga, globalna pozicija SAMO broj), lib/izazovi.js OSOBNI pool (hash user+week), /rang stranica + rang-widget na Šanku, /liga → redirect /rang, nav tab Rang; Wrapped na frend krug (OD n PAJDAŠA)
 - [x] Faza E: mapa — mjesta/otimanje OBRISANI (lib/mjesta.js + push copy), partner kafići zelene zastavice (mapa/page fetch kafici partner=true, map-view kaficiLayerRef), markeri = ja+frendovi, realtime bez filtera; kafic_id detekcija već u checkIn (Faza B); bodovi UI namjerno SKRIVEN do 1. ugovora
-- [ ] Faza F: discovery + onboarding + čišćenje + rewrite dokumentacije
+- [x] Faza F: discovery + onboarding + čišćenje — Pajdaši 'možda se znate' + zahtjev s profila; welcome/postavke/registracija bez grupa; grupni fajlovi (grupe-actions, moje-grupe, group-switcher, join-group-card, lib/groups, lib/liga, lib/mjesta, /g/[code]) + whats-new 2.0 OBRISANI; lib čist (fetchAllCheckins/Drinks bez groupId, auth bez getActiveGroupFor); CLAUDE.md 3.0 override sekcija. E2E verificirano na dev: ante vidi bepin feed/saziv/prisutnost, cvitan (bez frendova) vidi SAMO sebe + add-friends empty state
 - [ ] Faza G: cutover na produkciju (lockdown, SAMO uz dopuštenje)
 
 ## Status faza (ažuriraj nakon svake završene faze)

@@ -19,6 +19,7 @@ import InstallHint from "./install-hint";
 import AddFriendsCard from "./add-friends-card";
 import WrappedBanner from "./wrapped-banner";
 import RangWidget from "./rang-widget";
+import WhatsNew from "./whats-new";
 
 // Prozor za statistiku na Home: zadnjih 60 dana pokriva tekući mjesec +
 // streak titule (prag 30 dana), a ne skenira cijelu povijest.
@@ -162,6 +163,7 @@ export default async function Home() {
 
   return (
     <main className="flex flex-1 flex-col">
+      <WhatsNew />
       <RangWidget userId={user.id} friendIds={friendIds} todayKey={todayKey} />
       {friendIds.length === 0 && <AddFriendsCard friendCode={me?.friend_code} />}
       <Sank
