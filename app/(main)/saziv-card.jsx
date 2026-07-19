@@ -21,26 +21,14 @@ function timeToIso(hhmm) {
   return d.toISOString();
 }
 
-// Saziv "Dižem ekipu": bez živog saziva = gumb koji otvara mini formu;
-// sa živim sazivom = kartica s odazivima. Realtime drži roditelj (Sank).
-export default function SazivCard({
-  saziv,
-  odazivi,
-  profiles,
-  currentUserId,
-  now,
-  onSazivCreated,
-  onOdaziv,
-  onSazivGone,
-  onError,
-}) {
+// 3.0: gumb + sklopiva forma za dizanje MOG poziva (max 1 živi po
+// kreatoru — guard je u akciji). Živi pozivi frendova su SazivCard stack.
+export function SazivComposer({ currentUserId, onSazivCreated, onError }) {
   const [open, setOpen] = useState(false);
   const [mjesto, setMjesto] = useState("");
   const [kadMode, setKadMode] = useState("sad"); // "sad" | "kasnije"
   const [kadTime, setKadTime] = useState("21:00");
   const [isPending, startTransition] = useTransition();
-
-  const profileById = new Map(profiles.map((p) => [p.id, p]));
 
   function handleDigni() {
     const atIso = kadMode === "sad" ? new Date().toISOString() : timeToIso(kadTime);
@@ -63,6 +51,115 @@ export default function SazivCard({
     });
   }
 
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="pressable mt-4 flex w-full items-center justify-between rounded-card border border-accent/30 bg-accent/[0.08] px-4 py-3 text-left"
+      >
+        <span className="flex flex-col">
+          <span className="font-display text-lg uppercase tracking-wide text-accent">
+            📣 Poziv na laktanje
+          </span>
+          <span className="text-xs text-muted">
+            Digni sve pajdaše odjednom. Mjesto, vrijeme, gotovo.
+          </span>
+        </span>
+        <span className="text-2xl text-accent">›</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-card border border-accent/30 bg-accent/[0.08] px-4 py-4">
+      <p className="font-display text-lg uppercase tracking-wide text-accent">
+        📣 Poziv na laktanje
+      </p>
+      <label className="mt-3 block">
+        <span className="text-xs font-bold uppercase tracking-widest text-muted">
+          Gdje?
+        </span>
+        <input
+          type="text"
+          value={mjesto}
+          onChange={(e) => setMjesto(e.target.value)}
+          maxLength={40}
+          placeholder="Club23, plaža, kod mene..."
+          className="mt-1 w-full rounded-field border border-white/15 bg-black/30 px-3 py-3 text-sm font-bold placeholder:font-normal placeholder:text-muted/60 focus:border-accent/60 focus:outline-none"
+        />
+      </label>
+      <div className="mt-3">
+        <span className="text-xs font-bold uppercase tracking-widest text-muted">
+          Kad?
+        </span>
+        <div className="mt-1 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setKadMode("sad")}
+            className={`pressable rounded-full border px-4 py-2 text-xs font-bold uppercase tracking-wide ${
+              kadMode === "sad"
+                ? "border-accent bg-accent/20 text-accent"
+                : "border-white/15 text-muted"
+            }`}
+          >
+            Sad
+          </button>
+          <button
+            type="button"
+            onClick={() => setKadMode("kasnije")}
+            className={`pressable rounded-full border px-4 py-2 text-xs font-bold uppercase tracking-wide ${
+              kadMode === "kasnije"
+                ? "border-accent bg-accent/20 text-accent"
+                : "border-white/15 text-muted"
+            }`}
+          >
+            U...
+          </button>
+          {kadMode === "kasnije" && (
+            <input
+              type="time"
+              value={kadTime}
+              onChange={(e) => setKadTime(e.target.value)}
+              className="rounded-field border border-white/15 bg-black/30 px-3 py-2 text-sm font-bold focus:border-accent/60 focus:outline-none"
+            />
+          )}
+        </div>
+      </div>
+      <div className="mt-4 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleDigni}
+          disabled={isPending || !mjesto.trim()}
+          className="pressable flex-1 rounded-button bg-accent px-4 py-3 font-display text-lg uppercase tracking-wide text-black disabled:opacity-50"
+        >
+          {isPending ? "Sekunda..." : "Zovi narod 📣"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="pressable rounded-button border border-white/15 px-4 py-3 text-xs font-bold uppercase tracking-wide text-muted"
+        >
+          Odustani
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Jedan živi poziv (moj ili frendov) u stacku na vrhu Šanka
+export default function SazivCard({
+  saziv,
+  odazivi,
+  profileById,
+  currentUserId,
+  now,
+  onOdaziv,
+  onSazivGone,
+  onError,
+}) {
+  const [isPending, startTransition] = useTransition();
+
   function handleOdaziv(status) {
     onError(null);
     onOdaziv(currentUserId, saziv.id, status);
@@ -80,108 +177,10 @@ export default function SazivCard({
         onError(result.error);
         return;
       }
-      onSazivGone();
+      onSazivGone(saziv.id);
     });
   }
 
-  // ── Nema živog saziva: gumb + sklopiva forma ─────────────────────────
-  if (!saziv) {
-    if (!open) {
-      return (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="pressable mt-4 flex w-full items-center justify-between rounded-card border border-accent/30 bg-accent/[0.08] px-4 py-3 text-left"
-        >
-          <span className="flex flex-col">
-            <span className="font-display text-lg uppercase tracking-wide text-accent">
-              📣 Poziv na laktanje
-            </span>
-            <span className="text-xs text-muted">
-              Digni sve odjednom. Mjesto, vrijeme, gotovo.
-            </span>
-          </span>
-          <span className="text-2xl text-accent">›</span>
-        </button>
-      );
-    }
-    return (
-      <div className="mt-4 rounded-card border border-accent/30 bg-accent/[0.08] px-4 py-4">
-        <p className="font-display text-lg uppercase tracking-wide text-accent">
-          📣 Poziv na laktanje
-        </p>
-        <label className="mt-3 block">
-          <span className="text-xs font-bold uppercase tracking-widest text-muted">
-            Gdje?
-          </span>
-          <input
-            type="text"
-            value={mjesto}
-            onChange={(e) => setMjesto(e.target.value)}
-            maxLength={40}
-            placeholder="Club23, plaža, kod mene..."
-            className="mt-1 w-full rounded-field border border-white/15 bg-black/30 px-3 py-3 text-sm font-bold placeholder:font-normal placeholder:text-muted/60 focus:border-accent/60 focus:outline-none"
-          />
-        </label>
-        <div className="mt-3">
-          <span className="text-xs font-bold uppercase tracking-widest text-muted">
-            Kad?
-          </span>
-          <div className="mt-1 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setKadMode("sad")}
-              className={`pressable rounded-full border px-4 py-2 text-xs font-bold uppercase tracking-wide ${
-                kadMode === "sad"
-                  ? "border-accent bg-accent/20 text-accent"
-                  : "border-white/15 text-muted"
-              }`}
-            >
-              Sad
-            </button>
-            <button
-              type="button"
-              onClick={() => setKadMode("kasnije")}
-              className={`pressable rounded-full border px-4 py-2 text-xs font-bold uppercase tracking-wide ${
-                kadMode === "kasnije"
-                  ? "border-accent bg-accent/20 text-accent"
-                  : "border-white/15 text-muted"
-              }`}
-            >
-              U...
-            </button>
-            {kadMode === "kasnije" && (
-              <input
-                type="time"
-                value={kadTime}
-                onChange={(e) => setKadTime(e.target.value)}
-                className="rounded-field border border-white/15 bg-black/30 px-3 py-2 text-sm font-bold focus:border-accent/60 focus:outline-none"
-              />
-            )}
-          </div>
-        </div>
-        <div className="mt-4 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleDigni}
-            disabled={isPending || !mjesto.trim()}
-            className="pressable flex-1 rounded-button bg-accent px-4 py-3 font-display text-lg uppercase tracking-wide text-black disabled:opacity-50"
-          >
-            {isPending ? "Sekunda..." : "Zovi narod 📣"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            className="pressable rounded-button border border-white/15 px-4 py-3 text-xs font-bold uppercase tracking-wide text-muted"
-          >
-            Odustani
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Živi saziv: mjesto + vrijeme + odazivi ───────────────────────────
   const creator = profileById.get(saziv.created_by);
   const stizu = odazivi.filter((o) => o.status === "stizem");
   const neMogu = odazivi.filter((o) => o.status === "ne_mogu");
@@ -198,7 +197,7 @@ export default function SazivCard({
       }`;
 
   return (
-    <div className="mt-4 rounded-card border border-accent/40 bg-accent/[0.1] px-4 py-4">
+    <div className="mt-3 rounded-card border border-accent/40 bg-accent/[0.1] px-4 py-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-widest text-muted">

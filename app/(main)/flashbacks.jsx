@@ -16,10 +16,11 @@ function shiftMonths(date, months) {
   return d;
 }
 
-export default async function Flashbacks({ groupId, usernames, myId }) {
+export default async function Flashbacks({ usernames, myId }) {
   const supabase = await createClient();
   const dayStart = getCurrentDayStart();
 
+  // 3.0: bez group filtera — RLS vraća moje + frendovske slike
   const results = await Promise.all(
     FLASHBACKS.map(({ months }) => {
       const start = shiftMonths(dayStart, months);
@@ -27,7 +28,6 @@ export default async function Flashbacks({ groupId, usernames, myId }) {
       return supabase
         .from("checkins")
         .select("id, user_id, checked_in_at, photo_url, thumb_url")
-        .eq("group_id", groupId)
         .not("photo_url", "is", null)
         .gte("checked_in_at", start.toISOString())
         .lt("checked_in_at", end.toISOString());

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getUser, getActiveGroupFor } from "@/lib/auth";
+import { getUser } from "@/lib/auth";
+import { friendIdsOf } from "@/lib/friends";
 import { fetchAllCheckins } from "@/lib/checkins";
 import { getDayKey } from "@/lib/day";
 import {
@@ -46,16 +47,6 @@ export default async function WrappedPage({ searchParams }) {
   const user = await getUser();
   if (!user) redirect("/login");
 
-  const { active } = await getActiveGroupFor(user.id);
-  if (!active) {
-    return (
-      <EmptyState
-        title="Nisi u grupi."
-        body="Uđi u grupu da vidiš svoj mjesečni obračun."
-      />
-    );
-  }
-
   const supabase = await createClient();
   const todayKey = getDayKey(new Date());
   const currentMonthKey = monthOf(todayKey);
@@ -69,20 +60,17 @@ export default async function WrappedPage({ searchParams }) {
       ? mjesec
       : defaultMonthKey;
 
+  // 3.0: obračun ide po frend krugu (ja + pajdaši), staž od registracije
+  const friendIds = await friendIdsOf(supabase, user.id);
   const [{ data: profiles }, checkins] = await Promise.all([
     supabase
       .from("profiles")
-      .select(
-        "id, username, created_at, group_members!inner(group_id, joined_at)"
-      )
-      .eq("group_members.group_id", active.id),
-    fetchAllCheckins(supabase, undefined, active.id),
+      .select("id, username, created_at")
+      .in("id", [user.id, ...friendIds]),
+    fetchAllCheckins(supabase),
   ]);
 
-  const allProfiles = (profiles ?? []).map((p) => ({
-    ...p,
-    created_at: p.group_members?.[0]?.joined_at ?? p.created_at,
-  }));
+  const allProfiles = profiles ?? [];
   const daySets = userDaySets(checkins);
 
   const ranking = monthRanking({
@@ -132,7 +120,6 @@ export default async function WrappedPage({ searchParams }) {
       <WrappedCard
         username={mine.username}
         monthLabel={formatMonth(monthKey)}
-        groupName={active.name}
         days={mine.days}
         possible={mine.possible}
         pct={Math.round(mine.pct * 100)}

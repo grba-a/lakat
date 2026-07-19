@@ -168,8 +168,8 @@ mjesta vrijede za ŽIVU 2.x produkciju dok cutover ne prođe — potpuni rewrite
       komentarima — NE u repo, repo je javan)
 - [x] Faza A: baza 3.0 — `supabase-lakat3-1.sql` PRIMIJENJEN NA DEV (are_friends/can_see_checkin/can_see_saziv helperi, RLS po frendovima na svim tablicama, group_id nullable svugdje, bedževi globalni unique(user,badge), kafici tablica + checkins.kafic_id); `supabase-lakat3-migracija.sql` spreman za prod (Faza G, ide PRIJE lakat3-1); RLS verificiran REST-om (frend vidi/201, ne-frend prazno/403); seed: kafić Club23 partner na dev
 - [x] Faza B: friend model core — actions.js kompletno bez grupa (checkIn: saziv po vidljivosti, kadar=frendovi 500m, kafic_id detekcija, notifyFriends, fomoSweep po primatelju uz profiles.fomo_day claim; saziv max 1 po KREATORU); lib/push.js notifyFriends (notifyGroup obrisan), lib/friends.js friendIdsOf; badges globalni (bez groupId, founding_member+prvi_ikad umirovljeni, tenure od registracije); prazan-sank cron OBRISAN (i vercel.json), streak-visi samo osobni; group-switcher obrisan, layout bez grupa; fomo_day primijenjen na dev
-- [ ] Faza C: novi Šank — kronološki feed
-- [ ] Faza D: Rang + izazov + Wrapped
+- [x] Faza C: novi Šank — kronološki feed (sank.jsx: story bar prisutnih/stižućih avatara s mini action sheetom Profil/Stižem, feed današnjih rundi s inline reakcijama + komentari u bottom sheetu comment-sheet.jsx, stack živih poziva saziv-card.jsx SazivComposer+SazivCard, realtime bez filtera — RLS ograničava); page.jsx bez grupa (frend krug + comment counts); add-friends-card.jsx empty state s kodom; flashbacks bez group filtera; whats-new maknut sa Šanka
+- [x] Faza D: Rang — lib/rang.js (computeBodovi/computeRang: bodovi pojedinca, ljestvica frend kruga, globalna pozicija SAMO broj), lib/izazovi.js OSOBNI pool (hash user+week), /rang stranica + rang-widget na Šanku, /liga → redirect /rang, nav tab Rang; Wrapped na frend krug (OD n PAJDAŠA)
 - [ ] Faza E: mapa + partner kafići
 - [ ] Faza F: discovery + onboarding + čišćenje + rewrite dokumentacije
 - [ ] Faza G: cutover na produkciju (lockdown, SAMO uz dopuštenje)

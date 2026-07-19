@@ -21,7 +21,6 @@ function resolveFontFamily(className) {
 export default function WrappedCard({
   username,
   monthLabel,
-  groupName,
   days,
   rank,
   total,
@@ -101,7 +100,7 @@ export default function WrappedCard({
       ctx.fillText(`#${rank}`, 80, rankY);
       ctx.font = `700 30px ${sansFamily}`;
       ctx.fillStyle = muted;
-      ctx.fillText(`OD ${total} U GRUPI "${groupName.toUpperCase()}"`, 80, rankY + 46);
+      ctx.fillText(`OD ${total} PAJDAŠA`, 80, rankY + 46);
 
       const streakY = rankY + 200;
       ctx.font = `400 96px ${displayFamily}`;
@@ -139,7 +138,7 @@ export default function WrappedCard({
     return () => {
       cancelled = true;
     };
-  }, [username, monthLabel, groupName, days, rank, total, streak, isWinner]);
+  }, [username, monthLabel, days, rank, total, streak, isWinner]);
 
   async function handleShare() {
     if (!blob) return;

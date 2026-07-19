@@ -56,7 +56,7 @@ const ICONS = {
 
 const TABS = [
   { href: "/", label: "Šank", icon: "sank" },
-  { href: "/liga", label: "Liga", icon: "liga" },
+  { href: "/rang", label: "Rang", icon: "liga" },
   { href: "/mapa", label: "Mapa", icon: "mapa" },
   { href: "/profil", label: "Ja", icon: "ja" },
 ];
