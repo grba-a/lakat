@@ -166,7 +166,7 @@ mjesta vrijede za ŽIVU 2.x produkciju dok cutover ne prođe — potpuni rewrite
       SVA schema (21 skripta, bez prod-migracijskog bloka iz grupe1) primijenjena; `.env.local` na
       dev (prod backup u `.env.prod.backup`); 3 test računa + frendstvo (podaci u .env.local
       komentarima — NE u repo, repo je javan)
-- [ ] Faza A: baza 3.0 (are_friends RLS, kafici, migracijska skripta)
+- [x] Faza A: baza 3.0 — `supabase-lakat3-1.sql` PRIMIJENJEN NA DEV (are_friends/can_see_checkin/can_see_saziv helperi, RLS po frendovima na svim tablicama, group_id nullable svugdje, bedževi globalni unique(user,badge), kafici tablica + checkins.kafic_id); `supabase-lakat3-migracija.sql` spreman za prod (Faza G, ide PRIJE lakat3-1); RLS verificiran REST-om (frend vidi/201, ne-frend prazno/403); seed: kafić Club23 partner na dev
 - [ ] Faza B: friend model core (akcije + pushevi)
 - [ ] Faza C: novi Šank — kronološki feed
 - [ ] Faza D: Rang + izazov + Wrapped
