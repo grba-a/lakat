@@ -167,3 +167,7 @@ alter table public.checkins
   add column if not exists kafic_id uuid references public.kafici(id) on delete set null;
 create index if not exists checkins_kafic_idx on public.checkins (kafic_id)
   where kafic_id is not null;
+
+-- FOMO 3.0: claim dan zadnjeg FOMO pusha po korisniku (zamjena za
+-- nekadašnji groups.fomo_day — max 1 FOMO push dnevno po primatelju)
+alter table public.profiles add column if not exists fomo_day text;

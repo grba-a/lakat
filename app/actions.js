@@ -1,12 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentDayStart, getDayKey } from "@/lib/day";
-import { getActiveGroup, getMyGroups } from "@/lib/groups";
-import { notifyGroup, notifyUser } from "@/lib/push";
+import { friendIdsOf } from "@/lib/friends";
+import { notifyFriends, notifyUser } from "@/lib/push";
 import {
   checkinPushBody,
   rundaPushBody,
@@ -16,17 +15,14 @@ import {
   drinkMilestonePushBody,
   sazivPushBody,
   kadarPushBody,
-  mjestoOtetoPushBody,
-  mjestoOsvojenoPushBody,
 } from "@/lib/push-copy";
-import { detectOtimanje } from "@/lib/mjesta";
 import { distanceM, KADAR_RADIUS_M } from "@/lib/geo";
 import { evaluateBadges } from "@/lib/badges";
 import { drinkInfo } from "@/lib/drinks";
 
 const FOMO_MIN_PRESENT = 3;
 // Ne-prve runde šalju push, ali max 1× po autoru unutar ovog prozora —
-// da aktivna večer ne pretvori grupu u notifikacijski vodopad
+// da aktivna večer ne pretvori frendove u notifikacijski vodopad
 const RUNDA_PUSH_COOLDOWN_MS = 45 * 60 * 1000;
 
 export async function logout() {
@@ -35,30 +31,64 @@ export async function logout() {
   redirect("/login");
 }
 
-// Prebacivanje aktivne grupe (dropdown na Šanku) — samo u grupu u kojoj
-// si stvarno član
-export async function switchGroup(groupId) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+// FOMO 3.0: kad netko sjedne, njegovi frendovi koji NISU vani a sad imaju
+// FOMO_MIN_PRESENT+ frendova vani dobiju push — max 1× dnevno po
+// primatelju (claim preko profiles.fomo_day, isti obrazac kao nekad
+// groups.fomo_day — atomičan update spriječi duple pusheve)
+async function fomoSweep(authorId) {
+  const admin = createAdminClient();
+  const dayStartIso = getCurrentDayStart().toISOString();
+  const todayKey = getDayKey(new Date());
 
-  const groups = await getMyGroups(supabase, user.id);
-  if (!groups.some((g) => g.id === groupId)) {
-    return { error: "Nisi u toj grupi. Lijepo probaj." };
+  // samo autorovi frendovi su mogli "dobiti trećeg" ovim checkinom
+  const friends = await friendIdsOf(admin, authorId);
+  if (!friends.length) return;
+
+  const { data: outRows } = await admin
+    .from("checkins")
+    .select("user_id")
+    .is("cancelled_at", null)
+    .gte("checked_in_at", dayStartIso);
+  const out = new Set((outRows ?? []).map((r) => r.user_id));
+
+  const kandidati = friends.filter((f) => !out.has(f));
+  if (!kandidati.length) return;
+
+  // frendstva svih kandidata jednim upitom
+  const orExpr = kandidati
+    .map((id) => `requester.eq.${id},addressee.eq.${id}`)
+    .join(",");
+  const { data: kfr } = await admin
+    .from("friendships")
+    .select("requester, addressee")
+    .eq("status", "accepted")
+    .or(orExpr);
+
+  const kandidatSet = new Set(kandidati);
+  const countOut = new Map();
+  for (const r of kfr ?? []) {
+    for (const [me, other] of [
+      [r.requester, r.addressee],
+      [r.addressee, r.requester],
+    ]) {
+      if (kandidatSet.has(me) && out.has(other)) {
+        countOut.set(me, (countOut.get(me) ?? 0) + 1);
+      }
+    }
   }
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({ active_group_id: groupId })
-    .eq("id", user.id);
-  if (error) {
-    return { error: `Prebacivanje nije prošlo: ${error.message}` };
+  for (const [uid, n] of countOut) {
+    if (n < FOMO_MIN_PRESENT) continue;
+    const { data: claimed } = await admin
+      .from("profiles")
+      .update({ fomo_day: todayKey })
+      .eq("id", uid)
+      .or(`fomo_day.is.null,fomo_day.neq.${todayKey}`)
+      .select("id");
+    if (claimed?.length) {
+      await notifyUser({ userId: uid, body: fomoPushBody(n) });
+    }
   }
-
-  revalidatePath("/", "layout");
-  return { ok: true };
 }
 
 export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
@@ -95,21 +125,14 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
     lng = coords.lng;
   }
 
-  const { active } = await getActiveGroup(supabase, user.id);
-  if (!active) {
-    return { error: "Nisi ni u jednoj grupi. Kako si uopće ovdje?" };
-  }
-
   const dayStart = getCurrentDayStart();
 
-  // Više rundi dnevno je dozvoljeno (svaka runda = nova slika + piće);
-  // prva runda dana je "check-in", ostale šalju push uz cooldown po autoru
-  // (zato treba i VRIJEME prethodne runde, ne samo postoji li)
+  // Više rundi dnevno je dozvoljeno; prva runda dana je "check-in", ostale
+  // šalju push uz cooldown po autoru (zato treba i VRIJEME prethodne runde)
   const { data: existing, error: checkError } = await supabase
     .from("checkins")
     .select("checked_in_at")
     .eq("user_id", user.id)
-    .eq("group_id", active.id)
     .is("cancelled_at", null)
     .gte("checked_in_at", dayStart.toISOString())
     .order("checked_in_at", { ascending: false })
@@ -121,11 +144,11 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
   const isFirstToday = !existing?.length;
   const prevRundaAt = existing?.[0]?.checked_in_at ?? null;
 
-  // Runda nastala u prozoru živog saziva se veže na njega (pouzdanost +
-  // liga bodovi kasnije); prozor = sat prije at_time do 3h nakon
+  // Runda u prozoru živog VIDLJIVOG saziva (moj ili frendov — RLS filtrira)
+  // se veže na njega; prozor = sat prije at_time do 3h nakon
   let saziv_id = null;
   try {
-    const zivi = await fetchZiviSaziv(supabase, active.id);
+    const zivi = await fetchZiviSaziv(supabase);
     if (
       zivi &&
       Date.now() >= new Date(zivi.at_time).getTime() - SAZIV_RANIJE_MS
@@ -136,31 +159,24 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
     // saziv je bonus — runda ide dalje i bez njega
   }
 
-  // Zajednički kadar: označeni moraju biti članovi grupe I fizički blizu
-  // (server ne vjeruje klijentu), autor se uvijek dodaje; sprema se samo
-  // ako su u kadru bar dvoje. Slika bez dokaza ne može nositi kadar.
-  // STROGO lokacijski: bez autorovih koordinata kadar se odbacuje, a
-  // tagirani mora imati današnju rundu s koordinatama unutar radijusa.
+  // Zajednički kadar: tagirani moraju biti MOJI FRENDOVI i fizički blizu
+  // (server ne vjeruje klijentu). STROGO lokacijski: bez autorovih
+  // koordinata kadar se odbacuje.
   let kadar_user_ids = null;
   if (photo_url && lat != null && lng != null && Array.isArray(kadarIds) && kadarIds.length) {
     const candidates = [
       ...new Set(kadarIds.filter((x) => typeof x === "string" && x !== user.id)),
     ].slice(0, 20);
     if (candidates.length) {
-      const { data: valid } = await supabase
-        .from("group_members")
-        .select("user_id")
-        .eq("group_id", active.id)
-        .in("user_id", candidates);
-      const clanovi = (valid ?? []).map((v) => v.user_id);
-      if (clanovi.length) {
-        try {
+      try {
+        const friendIds = await friendIdsOf(supabase, user.id);
+        const frendovi = candidates.filter((id) => friendIds.includes(id));
+        if (frendovi.length) {
           const { data: tudjeRunde } = await supabase
             .from("checkins")
             .select("user_id, lat, lng")
-            .eq("group_id", active.id)
             .is("cancelled_at", null)
-            .in("user_id", clanovi)
+            .in("user_id", frendovi)
             .not("lat", "is", null)
             .not("lng", "is", null)
             .gte("checked_in_at", dayStart.toISOString())
@@ -174,20 +190,37 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
             if (distanceM({ lat, lng }, r) <= KADAR_RADIUS_M) blizu.push(r.user_id);
           }
           if (blizu.length) kadar_user_ids = [user.id, ...blizu];
-        } catch {
-          // provjera je best-effort — bez nje kadar se (strogo) odbacuje,
-          // runda ide dalje
         }
+      } catch {
+        // provjera je best-effort — bez nje kadar se (strogo) odbacuje
       }
     }
   }
 
-  // saziv_id / kadar idu u insert samo kad postoje — runda ne smije
-  // ovisiti o tome je li nova schema već primijenjena
+  // Partner kafić: runda unutar radijusa kafića dobiva kafic_id (temelj
+  // budućih bodova vjernosti — UI skriven do prvog ugovora)
+  let kafic_id = null;
+  if (lat != null && lng != null) {
+    try {
+      const { data: kafici } = await supabase
+        .from("kafici")
+        .select("id, lat, lng, radius_m");
+      let best = null;
+      for (const k of kafici ?? []) {
+        const d = distanceM({ lat, lng }, k);
+        if (d <= k.radius_m && (!best || d < best.d)) best = { id: k.id, d };
+      }
+      kafic_id = best?.id ?? null;
+    } catch {
+      // kafić je bonus
+    }
+  }
+
   const checkedInAt = new Date().toISOString();
-  const row = { user_id: user.id, group_id: active.id, photo_url, thumb_url, lat, lng };
+  const row = { user_id: user.id, photo_url, thumb_url, lat, lng };
   if (saziv_id) row.saziv_id = saziv_id;
   if (kadar_user_ids) row.kadar_user_ids = kadar_user_ids;
+  if (kafic_id) row.kafic_id = kafic_id;
   const { data: inserted, error } = await supabase
     .from("checkins")
     .insert(row)
@@ -205,7 +238,6 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
     newBadges = await evaluateBadges({
       admin: createAdminClient(),
       userId: user.id,
-      groupId: active.id,
       trigger: "checkin",
       context: { checkedInAt },
     });
@@ -213,41 +245,7 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
     // ignoriraj: checkin je prošao, bedževi su bonus
   }
 
-  // Otimanje mjesta: runda s koordinatama može promijeniti vlasnika grid
-  // ćelije na mapi — push objema grupama (best-effort, ne ruši rundu)
-  if (lat != null && lng != null && insertedId) {
-    try {
-      const promjena = await detectOtimanje({
-        admin: createAdminClient(),
-        lat,
-        lng,
-        checkinId: insertedId,
-      });
-      if (promjena) {
-        const zadaci = [
-          notifyGroup({
-            groupId: promjena.novi.id,
-            groupName: promjena.novi.name,
-            body: mjestoOsvojenoPushBody(promjena.prijasnji?.name ?? null),
-          }),
-        ];
-        if (promjena.prijasnji) {
-          zadaci.push(
-            notifyGroup({
-              groupId: promjena.prijasnji.id,
-              groupName: promjena.prijasnji.name,
-              body: mjestoOtetoPushBody(promjena.novi.name),
-            })
-          );
-        }
-        await Promise.allSettled(zadaci);
-      }
-    } catch {
-      // mapa je bonus — runda je prošla
-    }
-  }
-
-  // Kadar kopija "laktaju skupa" — imena tagiranih (best-effort)
+  // Kadar kopija "laktaju skupa" — imena tagiranih (frendovi su mi, RLS ih pušta)
   let kadarBody = null;
   if (kadar_user_ids) {
     try {
@@ -264,10 +262,9 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
     }
   }
 
-  // Push ostalima iz grupe — prva runda dana šalje uvijek (kadar kopija
-  // ima prednost); ostale runde šalju rundaPushBody uz cooldown po autoru
-  // (RUNDA_PUSH_COOLDOWN_MS), a kadar kopija se koristi samo za prvu kadar
-  // sliku dana u grupi. Ne smije srušiti checkin ako slanje pukne.
+  // Push MOJIM FRENDOVIMA — prva runda dana šalje uvijek (kadar kopija ima
+  // prednost); ostale runde šalju rundaPushBody uz cooldown po autoru, a
+  // kadar kopija se koristi samo za prvu autorovu kadar sliku dana.
   if (!isFirstToday) {
     if (
       prevRundaAt &&
@@ -277,12 +274,12 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
     }
     try {
       let body = null;
-      let excludeIds = kadar_user_ids ?? [];
+      const excludeIds = kadar_user_ids ?? [];
       if (kadarBody && insertedId) {
         const { count } = await supabase
           .from("checkins")
           .select("id", { count: "exact", head: true })
-          .eq("group_id", active.id)
+          .eq("user_id", user.id)
           .is("cancelled_at", null)
           .not("kadar_user_ids", "is", null)
           .gte("checked_in_at", dayStart.toISOString())
@@ -297,61 +294,26 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
           .maybeSingle();
         body = rundaPushBody(profile?.username ?? "Netko");
       }
-      await notifyGroup({
-        groupId: active.id,
-        groupName: active.name,
-        senderId: user.id,
-        excludeIds,
-        body,
-      });
+      await notifyFriends({ userId: user.id, excludeIds, body });
     } catch {
       // best-effort
     }
     return { ok: true, newBadges };
   }
+
   try {
     const { data: profile } = await supabase
       .from("profiles")
       .select("username")
       .eq("id", user.id)
       .maybeSingle();
-    await notifyGroup({
-      groupId: active.id,
-      groupName: active.name,
-      senderId: user.id,
+    await notifyFriends({
+      userId: user.id,
       excludeIds: kadarBody ? kadar_user_ids : [],
       body: kadarBody ?? checkinPushBody(profile?.username ?? "Netko"),
     });
 
-    // FOMO: kad treći različiti član danas dođe, pingaj one koji fale —
-    // jednom po danu po grupi (fomo_day claim spriječi dupli ping kod
-    // ponovnog check-ina nakon poništenja i race dva istovremena checkina)
-    const { data: todays } = await supabase
-      .from("checkins")
-      .select("user_id")
-      .eq("group_id", active.id)
-      .is("cancelled_at", null)
-      .gte("checked_in_at", dayStart.toISOString());
-    const present = [...new Set((todays ?? []).map((t) => t.user_id))];
-    if (present.length >= FOMO_MIN_PRESENT) {
-      const todayKey = getDayKey(new Date());
-      const admin = createAdminClient();
-      const { data: claimed } = await admin
-        .from("groups")
-        .update({ fomo_day: todayKey })
-        .eq("id", active.id)
-        .or(`fomo_day.is.null,fomo_day.neq.${todayKey}`)
-        .select("id");
-      if (claimed?.length) {
-        await notifyGroup({
-          groupId: active.id,
-          groupName: active.name,
-          senderId: user.id,
-          excludeIds: present,
-          body: fomoPushBody(present.length),
-        });
-      }
-    }
+    await fomoSweep(user.id);
   } catch {
     // ignoriraj: checkin je prošao, obavijesti su best-effort
   }
@@ -372,15 +334,14 @@ export async function react(checkinId, emoji) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Grupa reakcije = grupa slike na koju se reagira (RLS pušta samo
-  // slike iz vlastitih grupa, pa je ovo ujedno i provjera članstva)
+  // RLS pušta samo slike frendova — ovo je ujedno i provjera vidljivosti
   const { data: checkin } = await supabase
     .from("checkins")
-    .select("group_id")
+    .select("id")
     .eq("id", checkinId)
     .maybeSingle();
   if (!checkin) {
-    return { error: "Ta slika ne postoji ili nije iz tvoje grupe." };
+    return { error: "Ta slika ne postoji ili nije od tvog pajdaša." };
   }
 
   const { data: existing } = await supabase
@@ -399,7 +360,7 @@ export async function react(checkinId, emoji) {
   const { error } = await supabase
     .from("reactions")
     .upsert(
-      { checkin_id: checkinId, user_id: user.id, group_id: checkin.group_id, emoji },
+      { checkin_id: checkinId, user_id: user.id, emoji },
       { onConflict: "checkin_id,user_id" }
     );
   if (error) return { error: `Nije prošlo: ${error.message}` };
@@ -426,21 +387,18 @@ export async function addComment(checkinId, text) {
 
   const { data: checkin } = await supabase
     .from("checkins")
-    .select("group_id, user_id")
+    .select("id, user_id")
     .eq("id", checkinId)
     .maybeSingle();
   if (!checkin) {
-    return { error: "Ta slika ne postoji ili nije iz tvoje grupe." };
+    return { error: "Ta slika ne postoji ili nije od tvog pajdaša." };
   }
 
-  const { error } = await supabase
-    .from("comments")
-    .insert({
-      checkin_id: checkinId,
-      user_id: user.id,
-      group_id: checkin.group_id,
-      text: trimmed,
-    });
+  const { error } = await supabase.from("comments").insert({
+    checkin_id: checkinId,
+    user_id: user.id,
+    text: trimmed,
+  });
   if (error) return { error: `Nije prošlo: ${error.message}` };
 
   // Push vlasniku check-ina — ne sebi, i ne smije srušiti komentar ako pukne
@@ -465,7 +423,6 @@ export async function addComment(checkinId, text) {
     newBadges = await evaluateBadges({
       admin: createAdminClient(),
       userId: user.id,
-      groupId: checkin.group_id,
       trigger: "comment",
     });
   } catch {
@@ -493,8 +450,8 @@ export async function deleteComment(commentId) {
 
 const NAJAVA_TRAJANJE_MS = 45 * 60 * 1000;
 
-// "Stižem" — najava dolaska KOD konkretnog prisutnog (klik na njegovu
-// karticu). Push ide SAMO meti, ostali vide label u appu; istekne za 45 min.
+// "Stižem" — najava dolaska KOD konkretnog prisutnog FRENDA (klik na
+// njegovu karticu/avatar). Push ide SAMO meti; istekne za 45 min.
 export async function najaviDolazak(targetUserId) {
   const supabase = await createClient();
   const {
@@ -506,18 +463,12 @@ export async function najaviDolazak(targetUserId) {
     return { error: "Kod koga točno stižeš?" };
   }
 
-  const { active: grupa } = await getActiveGroup(supabase, user.id);
-  if (!grupa) {
-    return { error: "Nisi ni u jednoj grupi. Kamo točno stižeš?" };
-  }
-
   const dayStart = getCurrentDayStart();
 
   const { data: active } = await supabase
     .from("checkins")
     .select("id")
     .eq("user_id", user.id)
-    .eq("group_id", grupa.id)
     .is("cancelled_at", null)
     .gte("checked_in_at", dayStart.toISOString())
     .limit(1);
@@ -525,12 +476,12 @@ export async function najaviDolazak(targetUserId) {
     return { error: "Već si za šankom, kamo točno stižeš?" };
   }
 
-  // Meta mora biti za šankom — stiže se KOD nekoga, ne u prazno
+  // Meta mora biti za šankom — RLS pušta samo frendove pa je ovo ujedno
+  // i provjera frendstva (ne-frendov checkin je nevidljiv)
   const { data: targetActive } = await supabase
     .from("checkins")
     .select("id")
     .eq("user_id", targetUserId)
-    .eq("group_id", grupa.id)
     .is("cancelled_at", null)
     .gte("checked_in_at", dayStart.toISOString())
     .limit(1);
@@ -543,7 +494,6 @@ export async function najaviDolazak(targetUserId) {
     .from("najave")
     .select("id")
     .eq("user_id", user.id)
-    .eq("group_id", grupa.id)
     .gte("created_at", since)
     .limit(1);
   if (recent?.length) {
@@ -552,7 +502,7 @@ export async function najaviDolazak(targetUserId) {
 
   const { error } = await supabase
     .from("najave")
-    .insert({ user_id: user.id, group_id: grupa.id, target_user_id: targetUserId });
+    .insert({ user_id: user.id, target_user_id: targetUserId });
   if (error) {
     return { error: `Najava nije prošla: ${error.message}` };
   }
@@ -576,8 +526,8 @@ export async function najaviDolazak(targetUserId) {
 
 const DRINK_LOG_COOLDOWN_MS = 45 * 1000;
 
-// Logiranje pića — samo dok si aktivno checkiran (brojač živi na Šanku uz
-// prisutne); redni broj se ne sprema, derivira se brojanjem redova
+// Logiranje pića — samo dok si aktivno checkiran; redni broj se ne
+// sprema, derivira se brojanjem redova
 export async function logDrink(drinkType) {
   if (!drinkInfo(drinkType)) {
     return { error: "To piće ne postoji, hakeru." };
@@ -589,18 +539,12 @@ export async function logDrink(drinkType) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { active } = await getActiveGroup(supabase, user.id);
-  if (!active) {
-    return { error: "Nisi ni u jednoj grupi. Gdje točno piješ?" };
-  }
-
   const dayStart = getCurrentDayStart();
 
   const { data: activeCheckin } = await supabase
     .from("checkins")
     .select("id")
     .eq("user_id", user.id)
-    .eq("group_id", active.id)
     .is("cancelled_at", null)
     .gte("checked_in_at", dayStart.toISOString())
     .limit(1);
@@ -612,7 +556,6 @@ export async function logDrink(drinkType) {
     .from("drinks")
     .select("id, logged_at")
     .eq("user_id", user.id)
-    .eq("group_id", active.id)
     .gte("logged_at", dayStart.toISOString())
     .order("logged_at", { ascending: false })
     .limit(1);
@@ -622,7 +565,7 @@ export async function logDrink(drinkType) {
 
   const { error } = await supabase
     .from("drinks")
-    .insert({ user_id: user.id, group_id: active.id, drink_type: drinkType });
+    .insert({ user_id: user.id, drink_type: drinkType });
   if (error) {
     return { error: `Nije prošlo: ${error.message}` };
   }
@@ -631,7 +574,6 @@ export async function logDrink(drinkType) {
     .from("drinks")
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id)
-    .eq("group_id", active.id)
     .gte("logged_at", dayStart.toISOString());
   const tonightCount = count ?? 0;
 
@@ -640,7 +582,6 @@ export async function logDrink(drinkType) {
     newBadges = await evaluateBadges({
       admin: createAdminClient(),
       userId: user.id,
-      groupId: active.id,
       trigger: "drink",
       context: { tonightCount },
     });
@@ -656,10 +597,8 @@ export async function logDrink(drinkType) {
         .select("username")
         .eq("id", user.id)
         .maybeSingle();
-      await notifyGroup({
-        groupId: active.id,
-        groupName: active.name,
-        senderId: user.id,
+      await notifyFriends({
+        userId: user.id,
         body: drinkMilestonePushBody(profile?.username ?? "Netko"),
       });
     } catch {
@@ -670,9 +609,10 @@ export async function logDrink(drinkType) {
   return { ok: true, count: tonightCount, newBadges };
 }
 
-// ── Saziv "Dižem ekipu" ────────────────────────────────────────────────
-// Jedan živi saziv po grupi: od kreiranja do at_time + 3h. Nema crona —
-// istek se filtrira timestampom (isti obrazac kao najave).
+// ── Saziv "Poziv na laktanje" ──────────────────────────────────────────
+// 3.0: saziv ide SVIM frendovima kreatora; max JEDAN živi saziv PO
+// KREATORU (od kreiranja do at_time + 3h). Nema crona — istek se
+// filtrira timestampom.
 
 const SAZIV_ZIVOT_NAKON_MS = 3 * 60 * 60 * 1000;
 const SAZIV_RANIJE_MS = 60 * 60 * 1000;
@@ -685,15 +625,18 @@ const sazivTimeFmt = new Intl.DateTimeFormat("hr-HR", {
   minute: "2-digit",
 });
 
-async function fetchZiviSaziv(supabase, groupId) {
+// Najnoviji živi saziv: bez filtera = najnoviji VIDLJIVI (moj ili
+// frendov, RLS filtrira); s createdBy = samo moj (guard za digniEkipu)
+async function fetchZiviSaziv(supabase, createdBy = null) {
   const cutoff = new Date(Date.now() - SAZIV_ZIVOT_NAKON_MS).toISOString();
-  const { data } = await supabase
+  let query = supabase
     .from("sazivi")
     .select("id, created_by, place_text, at_time, created_at")
-    .eq("group_id", groupId)
     .gte("at_time", cutoff)
     .order("created_at", { ascending: false })
     .limit(1);
+  if (createdBy) query = query.eq("created_by", createdBy);
+  const { data } = await query;
   return data?.[0] ?? null;
 }
 
@@ -723,20 +666,14 @@ export async function digniEkipu(placeText, atTimeIso) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { active } = await getActiveGroup(supabase, user.id);
-  if (!active) {
-    return { error: "Nisi ni u jednoj grupi. Koga točno dižeš?" };
-  }
-
-  const postojeci = await fetchZiviSaziv(supabase, active.id);
+  const postojeci = await fetchZiviSaziv(supabase, user.id);
   if (postojeci) {
-    return { error: "Saziv već postoji. Odazovi se na njega." };
+    return { error: "Već imaš živi poziv. Spusti ga pa digni novi." };
   }
 
   const { data: inserted, error } = await supabase
     .from("sazivi")
     .insert({
-      group_id: active.id,
       created_by: user.id,
       place_text: mjesto,
       at_time: atTime.toISOString(),
@@ -744,16 +681,14 @@ export async function digniEkipu(placeText, atTimeIso) {
     .select("id")
     .maybeSingle();
   if (error) {
-    return { error: `Saziv nije prošao: ${error.message}` };
+    return { error: `Poziv nije prošao: ${error.message}` };
   }
 
-  // Tko diže, taj i stiže — auto odaziv (greška ne ruši saziv, builder
-  // nikad ne baca nego vraća {error} koji ovdje svjesno ignoriramo)
+  // Tko diže, taj i stiže — auto odaziv (greška ne ruši saziv)
   if (inserted?.id) {
     await supabase.from("saziv_odazivi").insert({
       saziv_id: inserted.id,
       user_id: user.id,
-      group_id: active.id,
       status: "stizem",
     });
   }
@@ -765,10 +700,8 @@ export async function digniEkipu(placeText, atTimeIso) {
       .eq("id", user.id)
       .maybeSingle();
     const jeSad = atTime.getTime() - Date.now() < 10 * 60 * 1000;
-    await notifyGroup({
-      groupId: active.id,
-      groupName: active.name,
-      senderId: user.id,
+    await notifyFriends({
+      userId: user.id,
       body: sazivPushBody(
         profile?.username ?? "Netko",
         mjesto,
@@ -794,17 +727,17 @@ export async function odazoviSe(sazivId, status) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // RLS pušta samo sazive vlastitih grupa — ovo je ujedno provjera članstva
+  // RLS pušta samo sazive frendova — ujedno provjera vidljivosti
   const { data: saziv } = await supabase
     .from("sazivi")
-    .select("id, group_id, at_time")
+    .select("id, at_time")
     .eq("id", sazivId)
     .maybeSingle();
   if (!saziv) {
-    return { error: "Taj saziv ne postoji ili nije iz tvoje grupe." };
+    return { error: "Taj poziv ne postoji ili nije od tvog pajdaša." };
   }
   if (new Date(saziv.at_time).getTime() + SAZIV_ZIVOT_NAKON_MS < Date.now()) {
-    return { error: "Taj saziv je istekao. Prekasno, kao i obično." };
+    return { error: "Taj poziv je istekao. Prekasno, kao i obično." };
   }
 
   const { error } = await supabase
@@ -813,7 +746,6 @@ export async function odazoviSe(sazivId, status) {
       {
         saziv_id: saziv.id,
         user_id: user.id,
-        group_id: saziv.group_id,
         status,
         responded_at: new Date().toISOString(),
       },
@@ -852,17 +784,11 @@ export async function undoLastDrink() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { active } = await getActiveGroup(supabase, user.id);
-  if (!active) {
-    return { error: "Nisi ni u jednoj grupi." };
-  }
-
   const dayStart = getCurrentDayStart();
   const { data: rows, error: findError } = await supabase
     .from("drinks")
     .select("id")
     .eq("user_id", user.id)
-    .eq("group_id", active.id)
     .gte("logged_at", dayStart.toISOString())
     .order("logged_at", { ascending: false })
     .limit(1);

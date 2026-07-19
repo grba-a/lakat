@@ -167,7 +167,7 @@ mjesta vrijede za ŽIVU 2.x produkciju dok cutover ne prođe — potpuni rewrite
       dev (prod backup u `.env.prod.backup`); 3 test računa + frendstvo (podaci u .env.local
       komentarima — NE u repo, repo je javan)
 - [x] Faza A: baza 3.0 — `supabase-lakat3-1.sql` PRIMIJENJEN NA DEV (are_friends/can_see_checkin/can_see_saziv helperi, RLS po frendovima na svim tablicama, group_id nullable svugdje, bedževi globalni unique(user,badge), kafici tablica + checkins.kafic_id); `supabase-lakat3-migracija.sql` spreman za prod (Faza G, ide PRIJE lakat3-1); RLS verificiran REST-om (frend vidi/201, ne-frend prazno/403); seed: kafić Club23 partner na dev
-- [ ] Faza B: friend model core (akcije + pushevi)
+- [x] Faza B: friend model core — actions.js kompletno bez grupa (checkIn: saziv po vidljivosti, kadar=frendovi 500m, kafic_id detekcija, notifyFriends, fomoSweep po primatelju uz profiles.fomo_day claim; saziv max 1 po KREATORU); lib/push.js notifyFriends (notifyGroup obrisan), lib/friends.js friendIdsOf; badges globalni (bez groupId, founding_member+prvi_ikad umirovljeni, tenure od registracije); prazan-sank cron OBRISAN (i vercel.json), streak-visi samo osobni; group-switcher obrisan, layout bez grupa; fomo_day primijenjen na dev
 - [ ] Faza C: novi Šank — kronološki feed
 - [ ] Faza D: Rang + izazov + Wrapped
 - [ ] Faza E: mapa + partner kafići
