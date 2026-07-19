@@ -155,6 +155,22 @@ Supabase Realtime subscription po grupi (`checkins-live-${groupId}`) na `checkin
 - Faze rada su u `PROMPTS.md` — jedna faza po sessionu, redom.
 - Nakon svake faze reci točno što je napravljeno i što korisnik mora ručno testirati.
 
+## LAKAT 3.0 U TIJEKU (od 2026-07-19)
+**Veliki pivot: grupe VAN, friend model + partner kafići.** Cijeli roadmap s konačnim
+odlukama korisnika je u `LAKAT3-PLAN.md` — čitaj ga PRIJE bilo kakvog rada. Faze idu
+redom (0→G), jedna po sesiji; SVE se razvija na DEV Supabase bazi (.env.local), prod se
+dira TEK u Fazi G (cutover uz lockdown). Dijelovi ovog CLAUDE.md koji opisuju grupe/ligu/
+mjesta vrijede za ŽIVU 2.x produkciju dok cutover ne prođe — potpuni rewrite je dio Faze F.
+
+- [ ] Faza 0: dev okruženje (novi Supabase projekt, seed, .env switch)
+- [ ] Faza A: baza 3.0 (are_friends RLS, kafici, migracijska skripta)
+- [ ] Faza B: friend model core (akcije + pushevi)
+- [ ] Faza C: novi Šank — kronološki feed
+- [ ] Faza D: Rang + izazov + Wrapped
+- [ ] Faza E: mapa + partner kafići
+- [ ] Faza F: discovery + onboarding + čišćenje + rewrite dokumentacije
+- [ ] Faza G: cutover na produkciju (lockdown, SAMO uz dopuštenje)
+
 ## Status faza (ažuriraj nakon svake završene faze)
 - [x] Faza 1: setup, auth, registracija sa šifrom
 - [x] Faza 2: glavni ekran, check-in, realtime popis
