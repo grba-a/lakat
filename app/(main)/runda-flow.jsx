@@ -42,8 +42,8 @@ export default function RundaFlow({ userId }) {
   const presentRef = useRef(null); // tko je danas prisutan — za kadar picker
   const toastTimerRef = useRef(null);
 
-  // Zatvorena kamera bez slike (podržano u novijim browserima) → ponudi
-  // ulaz bez dokaza
+  // Zatvorena kamera bez slike (podržano u novijim browserima) → podsjeti
+  // da je slika obavezna (nema objave bez dokaza)
   useEffect(() => {
     const input = cameraRef.current;
     if (!input) return;
@@ -204,21 +204,11 @@ export default function RundaFlow({ userId }) {
         const ok = await submitCheckIn(data.publicUrl, thumbPublicUrl, ids);
         if (ok) setWheelOpen(true);
       } catch {
-        setError("Slika nije prošla. Probaj opet ili uđi bez dokaza ko pička.");
+        setError("Slika nije prošla. Probaj opet, bez dokaza nema šanka.");
         setAskPhoto(true);
       } finally {
         setPublishing(false);
       }
-    });
-  }
-
-  function handleNoPhoto() {
-    setAskPhoto(false);
-    setPublishing(true);
-    startTransition(async () => {
-      const ok = await submitCheckIn(null, null);
-      setPublishing(false);
-      if (ok) setWheelOpen(true);
     });
   }
 
@@ -369,24 +359,16 @@ export default function RundaFlow({ userId }) {
               Slikaj nam gdje si smrade.
             </p>
             <p className="mt-1 text-xs text-muted">
-              Bez slike nema dokaza da si stvarno za šankom.
+              Bez slike nema objave — dokaz da si stvarno za šankom je obavezan.
             </p>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3">
               <button
                 type="button"
                 onClick={openCamera}
                 disabled={isPending}
-                className="pressable-soft flex h-12 flex-1 items-center justify-center rounded-button bg-accent font-display text-lg uppercase tracking-wide text-black disabled:opacity-50"
+                className="pressable-soft flex h-12 w-full items-center justify-center rounded-button bg-accent font-display text-lg uppercase tracking-wide text-black disabled:opacity-50"
               >
                 Ajde, slikam
-              </button>
-              <button
-                type="button"
-                onClick={handleNoPhoto}
-                disabled={isPending}
-                className="surface-2 pressable-soft flex h-12 flex-1 items-center justify-center rounded-button font-display text-lg uppercase tracking-wide text-muted disabled:opacity-50"
-              >
-                Nemam sliku
               </button>
             </div>
           </div>

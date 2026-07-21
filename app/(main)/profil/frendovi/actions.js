@@ -124,6 +124,29 @@ export async function sendFriendRequestTo(targetId) {
   return createRequest(admin, user.id, target);
 }
 
+// Odbij prijedlog "možda se znate": ne briše ga zauvijek, samo upiše
+// dismissal pa ga page.jsx sortira na kraj liste (deprioritizacija)
+export async function dismissSuggestion(targetId) {
+  const user = await requireUser();
+  if (!targetId || targetId === user.id) {
+    return { error: "Neispravan prijedlog." };
+  }
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("suggestion_dismissals")
+    .upsert(
+      {
+        user_id: user.id,
+        dismissed_id: targetId,
+        dismissed_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,dismissed_id" }
+    );
+  if (error) return { error: `Nije prošlo: ${error.message}` };
+  revalidatePath("/profil/frendovi");
+  return { ok: true };
+}
+
 export async function respondFriendRequest(id, accept) {
   const user = await requireUser();
   const admin = createAdminClient();

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,17 +12,10 @@ export default async function FrendoviPage() {
   if (!user) redirect("/login");
   const supabase = await createClient();
 
-  const [{ data: me }, { data: friendRows }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("friend_code, username")
-      .eq("id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("friendships")
-      .select("id, requester, addressee, status, created_at")
-      .or(`requester.eq.${user.id},addressee.eq.${user.id}`),
-  ]);
+  const { data: friendRows } = await supabase
+    .from("friendships")
+    .select("id, requester, addressee, status, created_at")
+    .or(`requester.eq.${user.id},addressee.eq.${user.id}`);
 
   // Profili druge strane — RLS ih pušta jer red (i pending) već postoji
   const otherIds = [
@@ -84,19 +78,39 @@ export default async function FrendoviPage() {
         }
       }
 
+      // Odbijeni prijedlozi ne nestaju — samo se guraju na kraj liste
+      const { data: dismissedRows } = await admin
+        .from("suggestion_dismissals")
+        .select("dismissed_id, dismissed_at")
+        .eq("user_id", user.id);
+      const dismissedAt = new Map(
+        (dismissedRows ?? []).map((d) => [d.dismissed_id, d.dismissed_at])
+      );
+
       const top = [...mutualCount.entries()]
-        .sort((a, b) => b[1] - a[1])
+        .map(([id, n]) => ({ id, mutual: n, dismissed: dismissedAt.get(id) ?? null }))
+        .sort((a, b) => {
+          // ne-odbijeni prije odbijenih; unutar grupe po broju zajedničkih,
+          // a odbijeni po starosti odbijanja (najstariji se prvi vraćaju)
+          const ad = a.dismissed ? 1 : 0;
+          const bd = b.dismissed ? 1 : 0;
+          if (ad !== bd) return ad - bd;
+          if (a.dismissed && b.dismissed) return a.dismissed.localeCompare(b.dismissed);
+          return b.mutual - a.mutual;
+        })
         .slice(0, SUGGESTION_LIMIT);
       if (top.length) {
         const { data: sugProfiles } = await admin
           .from("profiles")
           .select("id, username, avatar_url")
-          .in("id", top.map(([id]) => id));
+          .in("id", top.map((t) => t.id));
         const byId = new Map((sugProfiles ?? []).map((p) => [p.id, p]));
         suggestions = top
-          .map(([id, n]) => {
-            const p = byId.get(id);
-            return p ? { id, username: p.username, avatar_url: p.avatar_url, mutual: n } : null;
+          .map((t) => {
+            const p = byId.get(t.id);
+            return p
+              ? { id: t.id, username: p.username, avatar_url: p.avatar_url, mutual: t.mutual }
+              : null;
           })
           .filter(Boolean);
       }
@@ -107,14 +121,36 @@ export default async function FrendoviPage() {
 
   return (
     <main className="flex flex-1 flex-col">
-      <section className="mt-8">
+      <section className="relative mt-8">
         <h1 className="font-display text-5xl uppercase leading-none tracking-tight">
           Pajdaši<span className="text-accent">.</span>
         </h1>
+        <Link
+          href="/profil/frendovi/qr"
+          aria-label="Moj QR"
+          className="pressable absolute -top-2 right-0 rounded-full p-2 text-accent/70 active:bg-white/5"
+        >
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+            <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+            <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+            <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+            <path d="M7 12h10" />
+          </svg>
+        </Link>
       </section>
 
       <FrendoviClient
-        myCode={me?.friend_code}
         friends={friends}
         incoming={incoming}
         outgoing={outgoing}

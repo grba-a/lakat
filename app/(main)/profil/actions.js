@@ -19,12 +19,30 @@ export async function changeUsername(prevState, formData) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Nisi prijavljen." };
 
+  // Ime se smije mijenjati jednom u 30 dana (prva promjena je besplatna)
+  const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("username_changed_at")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (prof?.username_changed_at) {
+    const elapsed = Date.now() - new Date(prof.username_changed_at).getTime();
+    if (elapsed < MONTH_MS) {
+      const days = Math.ceil((MONTH_MS - elapsed) / (24 * 60 * 60 * 1000));
+      return {
+        error: `Ime si već mijenjao. Čekaj još ${days} ${days === 1 ? "dan" : "dana"}.`,
+      };
+    }
+  }
+
   const { error } = await supabase
     .from("profiles")
-    .update({ username })
+    .update({ username, username_changed_at: new Date().toISOString() })
     .eq("id", user.id);
 
   if (error) {
+    // 23505 = i exact-case unique i novi lower(username) index (case-insensitive)
     if (error.code === "23505") {
       return { error: `"${username}" je već zauzet. Smisli nešto originalnije.` };
     }

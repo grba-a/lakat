@@ -15,7 +15,7 @@ export default function AddFriendsCard({ friendCode }) {
       try {
         await navigator.share({
           title: "Lakat",
-          text: "Dodaj me na Lakatu",
+          text: "Dodaj me na Laktu",
           url: shareUrl,
         });
         return;

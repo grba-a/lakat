@@ -399,7 +399,7 @@ Kad push stigne bez teksta:
 
 ### 2.15. Pajdaši — `/profil/frendovi`
 - Naslov: **Pajdaši.**
-- `MOJ KOD` + **Podijeli** (→ `Kopirano`) · share: `Dodaj me na Lakatu`
+- `MOJ KOD` + **Podijeli** (→ `Kopirano`) · share: `Dodaj me na Laktu`
 - `DODAJ PAJDAŠA` — input `KOD`, gumb **Dodaj**
 - `POZIVI U GRUPU`: `{ime} te zove u {grupa}` · **Upadam** · **Odbij**
 - `ZAHTJEVI`: **Prihvati** · **Odbij**

@@ -3,7 +3,7 @@
 //   odgovor tjera router na puni page reload — uzrok štekanja navigacije)
 // - hashirani statički asseti su cache-first (immutable)
 // - navigacije su network-first s offline fallbackom
-const CACHE = "lakat-v4";
+const CACHE = "lakat-v5";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("push", (event) => {

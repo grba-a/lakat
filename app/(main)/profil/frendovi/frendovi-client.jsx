@@ -4,10 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Avatar from "../../avatar";
 import {
-  sendFriendRequest,
   sendFriendRequestTo,
   respondFriendRequest,
   removeFriend,
+  dismissSuggestion,
 } from "./actions";
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
@@ -93,7 +93,6 @@ function FriendRow({ friend, onAction, style }) {
 }
 
 export default function FrendoviClient({
-  myCode,
   friends,
   incoming,
   outgoing,
@@ -102,9 +101,6 @@ export default function FrendoviClient({
   const router = useRouter();
   const [actionMsg, setActionMsg] = useState(null);
   const [, startTransition] = useTransition();
-  const [code, setCode] = useState("");
-  const [addPending, setAddPending] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [sentTo, setSentTo] = useState(() => new Set());
 
   function runAction(fn) {
@@ -113,21 +109,6 @@ export default function FrendoviClient({
       const result = await fn();
       setActionMsg(result ?? null);
       if (result?.ok) router.refresh();
-    });
-  }
-
-  function handleAdd(e) {
-    e.preventDefault();
-    setActionMsg(null);
-    setAddPending(true);
-    startTransition(async () => {
-      const result = await sendFriendRequest(code);
-      setActionMsg(result ?? null);
-      setAddPending(false);
-      if (result?.ok) {
-        setCode("");
-        router.refresh();
-      }
     });
   }
 
@@ -141,70 +122,18 @@ export default function FrendoviClient({
     });
   }
 
-  async function handleShare() {
-    if (!myCode) return;
-    const shareUrl = `${window.location.origin}/f/${myCode}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "Lakat",
-          text: "Dodaj me na Lakatu",
-          url: shareUrl,
-        });
-        return;
-      } catch {
-        // korisnik otkazao share sheet — padni na copy
-      }
-    }
-    await navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  // Odbij prijedlog: ne nestaje, server ga premjesti na kraj liste
+  function handleDismiss(id) {
+    setActionMsg(null);
+    startTransition(async () => {
+      const result = await dismissSuggestion(id);
+      if (result?.ok) router.refresh();
+      else setActionMsg(result ?? null);
+    });
   }
 
   return (
     <>
-      <section className="mt-8">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
-          Moj kod
-        </h2>
-        <div className="glass mt-4 flex items-center justify-between rounded-card p-4">
-          <p className="font-display text-3xl tracking-[0.3em] text-accent">
-            {myCode ?? "······"}
-          </p>
-          <button
-            type="button"
-            onClick={handleShare}
-            className="pressable-soft rounded-full border border-accent/25 bg-accent/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-accent"
-          >
-            {copied ? "Kopirano" : "Podijeli"}
-          </button>
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-muted">
-          Dodaj pajdaša
-        </h2>
-        <form onSubmit={handleAdd} className="mt-4 flex gap-2">
-          <input
-            type="text"
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            maxLength={6}
-            placeholder="KOD"
-            autoComplete="off"
-            className="h-14 flex-1 rounded-field border border-white/10 bg-white/[0.05] px-4 text-center font-display text-xl uppercase tracking-[0.3em] outline-none transition-[border-color,box-shadow] duration-200 focus:border-accent/60 focus:shadow-[0_0_0_3px_rgba(74,222,128,0.15)]"
-          />
-          <button
-            type="submit"
-            disabled={addPending}
-            className="pressable-soft h-14 shrink-0 rounded-button bg-accent px-6 font-display text-lg uppercase tracking-wide text-black disabled:opacity-50"
-          >
-            {addPending ? "..." : "Dodaj"}
-          </button>
-        </form>
-      </section>
-
       {actionMsg && (
         <div className="mt-4">
           <Msg state={actionMsg} />
@@ -236,14 +165,24 @@ export default function FrendoviClient({
                     </span>
                   </span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => handleSuggestion(s.id)}
-                  disabled={sentTo.has(s.id)}
-                  className="pressable-soft shrink-0 rounded-full border border-accent/25 bg-accent/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-accent disabled:opacity-50"
-                >
-                  {sentTo.has(s.id) ? "Poslano" : "Dodaj"}
-                </button>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleDismiss(s.id)}
+                    aria-label="Odbij prijedlog"
+                    className="pressable flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-sm text-muted"
+                  >
+                    ✕
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSuggestion(s.id)}
+                    disabled={sentTo.has(s.id)}
+                    className="pressable-soft rounded-full border border-accent/25 bg-accent/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-accent disabled:opacity-50"
+                  >
+                    {sentTo.has(s.id) ? "Poslano" : "Dodaj"}
+                  </button>
+                </span>
               </li>
             ))}
           </ul>

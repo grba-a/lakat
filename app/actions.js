@@ -105,6 +105,10 @@ export async function checkIn(photoUrl, thumbUrl, coords, kadarIds) {
   if (typeof photoUrl === "string" && photoUrl.startsWith(dokaziPrefix)) {
     photo_url = photoUrl;
   }
+  // Slika je OBAVEZNA — bez valjanog dokaza nema runde (i UI to sprječava)
+  if (!photo_url) {
+    return { error: "Bez slike nema šanka. Slikaj pa objavi." };
+  }
   let thumb_url = null;
   if (photo_url && typeof thumbUrl === "string" && thumbUrl.startsWith(dokaziPrefix)) {
     thumb_url = thumbUrl;

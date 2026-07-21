@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { getCurrentDayStart } from "@/lib/day";
+import { fetchTodayFeed } from "@/lib/feed";
 import { najaviDolazak, react } from "@/app/actions";
 import BrandPunct from "@/app/brand-punct";
 import Avatar from "./avatar";
@@ -83,6 +84,10 @@ export default function Sank({
   const [commentFor, setCommentFor] = useState(null);
   const [avatarSheet, setAvatarSheet] = useState(null); // { profile, present }
   const [isPending, startTransition] = useTransition();
+  // Kad PWA ode u pozadinu (iOS), realtime WS tiho umre — bumpanjem ovog
+  // noncea prisilimo svjež kanal, a klijentski refetch povuče propuštene evente.
+  const [reconnectNonce, setReconnectNonce] = useState(0);
+  const lastReconnectRef = useRef(0);
 
   // Prati koji su checkin id-jevi već viđeni (initial load) da se realtime
   // dolasci mogu jednokratno animirati (uklizavanje), bez ponavljanja na
@@ -219,11 +224,75 @@ export default function Sank({
           }));
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        // Kanal pukao/istekao dok smo u prvom planu → svjež kanal (throttlano
+        // da mrtva mreža ne uđe u petlju rekonekcija). CLOSED je namjerni
+        // cleanup pa ga ignoriramo.
+        if (
+          (status === "CHANNEL_ERROR" || status === "TIMED_OUT") &&
+          typeof document !== "undefined" &&
+          document.visibilityState === "visible"
+        ) {
+          const t = Date.now();
+          if (t - lastReconnectRef.current < 4000) return;
+          lastReconnectRef.current = t;
+          setReconnectNonce((n) => n + 1);
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUserId]);
+  }, [currentUserId, reconnectNonce]);
+
+  // Povratak u prvi plan (visibilitychange/focus): osvježi realtime kanal i
+  // klijentski povuci današnji feed da nadoknadiš evente propuštene dok je
+  // kanal bio mrtav. Geolokacija se NE dira (ide samo kroz PLUS gumb), pa
+  // brzina lokacije ostaje netaknuta. setState je u async/event handleru
+  // (ne u tijelu efekta) pa nema cascading-render problema.
+  useEffect(() => {
+    async function refetchFeed() {
+      try {
+        const supabase = createClient();
+        const feed = await fetchTodayFeed(supabase);
+        const cMap = {};
+        for (const c of feed.checkins) {
+          cMap[c.id] = c;
+          seenIdsRef.current.add(c.id);
+        }
+        setRows(cMap);
+        const nMap = {};
+        for (const n of feed.najave) nMap[n.id] = n;
+        setNajave(nMap);
+        setReactions(feed.reactions);
+        const dMap = {};
+        for (const d of feed.drinks) dMap[d.id] = d;
+        setDrinks(dMap);
+        const sMap = {};
+        for (const s of feed.sazivi) sMap[s.id] = s;
+        setSazivi(sMap);
+        const oMap = {};
+        for (const o of feed.odazivi) oMap[`${o.saziv_id}:${o.user_id}`] = o;
+        setOdazivi(oMap);
+        setCommentCounts(feed.commentCounts);
+      } catch {
+        // refetch je bonus — realtime kanal i dalje hvata nove evente
+      }
+    }
+    function onForeground() {
+      if (document.visibilityState !== "visible") return;
+      const t = Date.now();
+      if (t - lastReconnectRef.current < 4000) return;
+      lastReconnectRef.current = t;
+      setReconnectNonce((n) => n + 1);
+      refetchFeed();
+    }
+    document.addEventListener("visibilitychange", onForeground);
+    window.addEventListener("focus", onForeground);
+    return () => {
+      document.removeEventListener("visibilitychange", onForeground);
+      window.removeEventListener("focus", onForeground);
+    };
+  }, []);
 
   // Nakon 06:00 sve se resetira, najave/sazivi istječu — bez refresha
   useEffect(() => {
